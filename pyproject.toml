@@ -1,0 +1,18 @@
+# Nur Werkzeug-Konfiguration (Lint). Das Projekt wird nicht als Paket installiert –
+# der Generator ist ein einzelnes Stdlib-Skript, die eigentliche App-Logik lebt im
+# gebauten HTML. Versions-Quelle der Wahrheit ist version.py.
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# F (pyflakes) fängt echte Fehler – unbenutzte/undefinierte Namen; I = Import-Sortierung;
+# B = bugbear; UP = pyupgrade; C901 = zyklomatische Komplexität. Gleiche Auswahl wie im
+# situation-report- und Wikelo-Projekt, damit die Qualitätsmaßstäbe konsistent sind.
+select = ["F", "I", "B", "UP", "C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+# Hinweis: ruff ist im Quality-Workflow (.github/workflows/quality.yml) auf 0.15.*
+# gepinnt, damit CI exakt die lokal genutzte Version fährt.

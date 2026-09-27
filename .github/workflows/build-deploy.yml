@@ -1,0 +1,45 @@
+name: Build & Deploy
+
+# Baut die App neu (frische star-head-Baupläne) und veröffentlicht sie
+# als Online-Version auf GitHub Pages. Nur bei Push auf main + manuell.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Planer bauen (SC_Bauplan_Planer.html)
+        run: python bauplan_planer_bauen.py
+      - name: Pages-Verzeichnis vorbereiten
+        run: |
+          mkdir -p _site
+          cp SC_Bauplan_Planer.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

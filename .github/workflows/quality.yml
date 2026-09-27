@@ -1,0 +1,27 @@
+name: Quality
+
+# Lint-Gate wie im situation-report-/Wikelo-Projekt: ruff (Fehler + Import-Ordnung +
+# bugbear + pyupgrade + Komplexität). Läuft bei Änderungen an Python/Config.
+on:
+  push:
+    branches: [main]
+    paths: ["**.py", "pyproject.toml", ".github/workflows/quality.yml"]
+  pull_request:
+    paths: ["**.py", "pyproject.toml", ".github/workflows/quality.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install "ruff==0.15.*" --quiet
+      - name: Ruff (Lint + Import-Ordnung)
+        run: python -m ruff check .
