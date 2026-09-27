@@ -130,6 +130,24 @@ def categorize(fine_type: str) -> tuple[str, str]:
     return TAXO.get(fine_type, ("Sonstiges", fine_type or "Sonstiges"))
 
 
+def spec_fields(desc: str) -> dict:
+    """Size/Grade/Class aus der Item-Beschreibung ziehen (z. B. 'S1 · A · Civilian').
+
+    star-head liefert die Beschreibung mit literalen '\\n' und teils NBSP; beides
+    normalisieren, dann die drei Zeilen greifen. Nur belegte Felder zurückgeben."""
+    text = (desc or "").replace("\\n", "\n").replace("\xa0", " ")
+    out = {}
+    for key, short in (("Size", "sz"), ("Grade", "gr"), ("Class", "kl")):
+        m = re.search(r"(?mi)^" + key + r":\s*(.+?)\s*$", text)
+        if m:
+            val = m.group(1).strip()
+            if short == "sz":
+                val = val.lstrip("Ss").strip()  # 'S0' -> '0'
+            if val:
+                out[short] = val
+    return out
+
+
 def build_data() -> dict:
     """Baupläne laden und auf das schlanke App-Schema reduzieren."""
     print("Lade Baupläne (star-head.de) ...")
@@ -160,14 +178,16 @@ def build_data() -> dict:
                 src[cnm] = ch
         sources = [{"c": k, "p": v} for k, v in sorted(src.items())]
         cls, sub = categorize(itmap.get(name.lower(), "Sonstiges"))
-        out.append({
+        entry = {
             "name": name,
             "cls": cls,
             "sub": sub,
             "costs": costs,
             "src": sources,
             "def": 1 if b.get("grantedByDefault") else 0,
-        })
+        }
+        entry.update(spec_fields((b.get("item") or {}).get("description") or ""))
+        out.append(entry)
 
     out.sort(key=lambda x: x["name"].lower())
     n_src = sum(1 for x in out if x["src"])
@@ -285,8 +305,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .bp .recipe{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
   .chip{font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:2px 8px;white-space:nowrap}
   .chip .q{color:var(--accent2);font-weight:700}
+  .bp .spec{font-size:12px;color:var(--accent);font-family:var(--disp);font-weight:600;letter-spacing:.04em}
   .bp .srcline{font-size:12.5px;color:var(--muted);margin-top:1px}
   .bp .srcline .none{color:var(--bad)}
+  .scrollcap{max-height:33vh;overflow:auto}
+  a.btn{text-decoration:none;display:inline-flex;align-items:center}
+  .btn.swap{border-color:var(--accent2);color:var(--accent2)}
+  .btn.swap:hover{background:var(--accent2);color:var(--bg)}
   .addbox{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
   .addbox input{width:56px;text-align:center}
   .addbtn{font-family:var(--disp);font-weight:700;font-size:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 14px;cursor:pointer;margin-left:auto}
@@ -317,16 +342,30 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="toolbar">
       <button class="btn" id="langBtn" type="button">EN / DE</button>
       <button class="btn" id="themeBtn" type="button"><span class="de">Hell / Dunkel</span><span class="en">Light / Dark</span></button>
+      <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/" target="_blank" rel="noopener" title="Zum Wikelo-Ressourcen-Planer wechseln">🔀 <span class="de">Wikelo-Planer</span><span class="en">Wikelo Planner</span></a>
       <button class="btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden"><span class="de">📥 Erworbene (SCDL)</span><span class="en">📥 Import owned (SCDL)</span></button>
       <button class="btn" id="refreshBtn" type="button" title="Baupläne live von star-head.de neu laden">🔄 <span class="de">Aktualisieren</span><span class="en">Refresh</span></button>
+      <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">💾 <span class="de">Speichern</span><span class="en">Save</span></button>
+      <button class="btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">📂 <span class="de">Laden</span><span class="en">Load</span></button>
       <div class="spacer"></div>
       <span class="stat" id="buildStat"></span>
     </div>
   </header>
 
   <div class="cols">
-    <!-- LINKS: RESSOURCEN + BESCHAFFUNG -->
+    <!-- LINKS: BESCHAFFUNG (oben, scrollbar) + RESSOURCEN -->
     <div class="left">
+      <div class="card">
+        <div class="ph"><span class="de">Beschaffungsliste</span><span class="en">Procurement list</span><span class="n" id="matN"></span></div>
+        <div class="pbody scrollcap" id="matBody"></div>
+        <p class="note"><span class="de">Materialien sind raffinierte Rohstoffe – kaufbar an Raffinerien/TDD oder selbst raffinieren.</span><span class="en">Materials are refined commodities – buy at refineries/TDD or refine them yourself.</span></p>
+        <div class="expbar">
+          <button class="btn pri" id="copyBtn" type="button">📋 <span class="de">Kopieren</span><span class="en">Copy</span></button>
+          <button class="btn" id="txtBtn" type="button">⬇ .txt</button>
+          <button class="btn" id="csvBtn" type="button">⬇ .csv</button>
+        </div>
+      </div>
+
       <div class="card">
         <div class="ph"><span class="de">Verfügbare Ressourcen</span><span class="en">Available resources</span><span class="n" id="resN"></span></div>
         <div class="restools">
@@ -334,19 +373,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <span class="stat" style="align-self:center"><span class="de">Bestand, den du schon hast</span><span class="en">what you already own</span></span>
         </div>
         <div class="resgrid" id="resGrid"></div>
-      </div>
-
-      <div class="card">
-        <div class="ph"><span class="de">Beschaffungsliste</span><span class="en">Procurement list</span><span class="n" id="matN"></span></div>
-        <div class="pbody" id="matBody"></div>
-        <p class="note"><span class="de">Materialien sind raffinierte Rohstoffe – kaufbar an Raffinerien/TDD oder selbst raffinieren.</span><span class="en">Materials are refined commodities – buy at refineries/TDD or refine them yourself.</span></p>
-        <div class="expbar">
-          <button class="btn pri" id="copyBtn" type="button">📋 <span class="de">Kopieren</span><span class="en">Copy</span></button>
-          <button class="btn" id="txtBtn" type="button">⬇ .txt</button>
-          <button class="btn" id="csvBtn" type="button">⬇ .csv</button>
-          <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON"><span class="de">Zustand ⬇</span><span class="en">State ⬇</span></button>
-          <button class="btn" id="loadStateBtn" type="button"><span class="de">Zustand ⬆</span><span class="en">State ⬆</span></button>
-        </div>
       </div>
     </div>
 
@@ -356,6 +382,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <input type="search" id="q" placeholder="Suchen … (Name / Material)" autocomplete="off">
         <select id="fClass"></select>
         <select id="fSub"></select>
+        <select id="fSize" title="Größe"></select>
+        <select id="fGrade" title="Grade"></select>
+        <select id="fKls" title="Klasse (Civilian/Military/…)"></select>
         <select id="fOwned" disabled>
           <option value="all" data-i18n="ownAll">alle</option>
           <option value="yes" data-i18n="ownYes">nur erworben</option>
@@ -390,7 +419,7 @@ const RAW = /*__DATA__*/{};
 /* ---------- i18n ---------- */
 const I18N={
   de:{ownAll:'alle Erworben',ownYes:'nur erworben',ownNo:'nur nicht erworben',sortName:'Name A–Z',sortMats:'wenigste Materialien',
-    src:'Quelle',srcNone:'Quelle unbekannt',mat:'Material',need:'benötigt',left:'noch',allClass:'alle Klassen',allSub:'alle Unterklassen',
+    src:'Quelle',srcNone:'Quelle unbekannt',mat:'Material',need:'benötigt',left:'noch',allClass:'alle Kategorien',allSub:'alle Unterkategorien',allSize:'alle Größen',allGrade:'alle Grade',allKls:'alle Klassen',
     selEmpty:'Noch keine Baupläne gewählt – rechts im Katalog „+" klicken.',matEmpty:'Wähle Baupläne, um den Materialbedarf zu sehen.',
     owned:'erworben',added:'hinzugefügt',copied:'in Zwischenablage kopiert',have:'Bestand',
     orphan:'nicht im Katalog',orphanWarn:n=>`⚠ ${n} gewählte(r) Bauplan/Baupläne nicht im Katalog – nicht in der Summe enthalten.`,
@@ -398,7 +427,7 @@ const I18N={
     refOk:'Baupläne aktualisiert.',refErr:'star-head nicht erreichbar.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
     results:'Treffer',more:n=>`… ${n} weitere anzeigen`},
   en:{ownAll:'all owned',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
-    src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all classes',allSub:'all subclasses',
+    src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
     selEmpty:'No blueprints selected yet – click “+” in the catalog.',matEmpty:'Select blueprints to see the material needs.',
     owned:'owned',added:'added',copied:'copied to clipboard',have:'stock',
     orphan:'not in catalog',orphanWarn:n=>`⚠ ${n} selected blueprint(s) not in catalog – excluded from totals.`,
@@ -412,7 +441,8 @@ let LANG=(load(LS.lang)==='en')?'en':'de';
 function t(k){return I18N[LANG][k];}
 
 /* ---------- state ---------- */
-let BP=[], CLASS_ORDER=[], SUBS={}, MATS=[];
+let BP=[], CLASS_ORDER=[], SUBS={}, MATS=[], SIZES=[], GRADES=[], KLS=[];
+const GRADE_RANK={A:0,B:1,C:2,D:3};
 let SEL=load(LS.sel)||{}, STOCK=load(LS.stock)||{}, OWNED=load(LS.owned)||{}, OWNMETA=load(LS.ownMeta)||null;
 let renderCap=150;
 
@@ -423,10 +453,11 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
 function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2200);}
 function down(name,text,type){const b=new Blob([text],{type:type||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
 function cleanSrc(s){s=String(s).replace(/~\w+\([^)]*\)/g,'(Ort)').trim();if(/^[a-z0-9_]+$/.test(s)){const m=s.match(/blackbox_recover_title_([a-z]+)_/);if(m)return'Black Box Recovery ('+m[1].toUpperCase()+')';return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}return s;}
+function specOf(desc){desc=String(desc||'').replace(/\\n/g,'\n').replace(/ /g,' ');const g=k=>{const m=desc.match(new RegExp('^'+k+':\\s*(.+?)\\s*$','mi'));return m?m[1].trim():'';};const o={};let s=g('Size').replace(/^s/i,'').trim();if(s)o.sz=s;const gr=g('Grade');if(gr)o.gr=gr;const kl=g('Class');if(kl)o.kl=kl;return o;}
 
 function ingest(raw){
   BP=(raw.blueprints||[]).map(b=>{
-    const s=(b.name+' '+(b.cls||'')+' '+(b.sub||'')+' '+b.costs.map(c=>c.n).join(' ')).toLowerCase();
+    const s=(b.name+' '+(b.cls||'')+' '+(b.sub||'')+' '+(b.sz?'s'+b.sz:'')+' '+(b.gr||'')+' '+(b.kl||'')+' '+b.costs.map(c=>c.n).join(' ')).toLowerCase();
     return Object.assign({},b,{_s:s});
   });
   BP.forEach(b=>{if(b.def && OWNMETA===null) OWNED[b.name]=1;});
@@ -437,6 +468,9 @@ function ingest(raw){
   for(const b of BP){(SUBS[b.cls]=SUBS[b.cls]||new Set()).add(b.sub);}
   for(const k in SUBS)SUBS[k]=[...SUBS[k]].sort((a,b)=>a.localeCompare(b));
   MATS=[...new Set(BP.flatMap(b=>b.costs.map(c=>c.n)))].sort((a,b)=>a.localeCompare(b));
+  SIZES=[...new Set(BP.map(b=>b.sz).filter(Boolean))].sort((a,b)=>(parseInt(a,10)||0)-(parseInt(b,10)||0));
+  GRADES=[...new Set(BP.map(b=>b.gr).filter(Boolean))].sort((a,b)=>((GRADE_RANK[a]??9)-(GRADE_RANK[b]??9))||a.localeCompare(b));
+  KLS=[...new Set(BP.map(b=>b.kl).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   document.getElementById('buildStat').textContent=(raw.source||'')+' '+(raw.generated||'');
   document.getElementById('footStat').textContent=BP.length+' '+(LANG==='de'?'Baupläne':'blueprints')+' · '+MATS.length+' '+(LANG==='de'?'Materialien':'materials');
 }
@@ -444,11 +478,18 @@ function ingest(raw){
 /* ---------- filters ---------- */
 const qEl=document.getElementById('q'), fClass=document.getElementById('fClass'),
       fSub=document.getElementById('fSub'), fOwned=document.getElementById('fOwned'),
-      fSort=document.getElementById('fSort'), listEl=document.getElementById('list');
+      fSort=document.getElementById('fSort'), listEl=document.getElementById('list'),
+      fSize=document.getElementById('fSize'), fGrade=document.getElementById('fGrade'), fKls=document.getElementById('fKls');
 
 function buildClassFilter(){
   fClass.innerHTML='<option value="">'+t('allClass')+'</option>'+CLASS_ORDER.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   buildSubFilter();
+  buildSpecFilters();
+}
+function buildSpecFilters(){
+  fSize.innerHTML='<option value="">'+t('allSize')+'</option>'+SIZES.map(s=>`<option value="${esc(s)}">S${esc(s)}</option>`).join('');
+  fGrade.innerHTML='<option value="">'+t('allGrade')+'</option>'+GRADES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  fKls.innerHTML='<option value="">'+t('allKls')+'</option>'+KLS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
 }
 function buildSubFilter(){
   const c=fClass.value;
@@ -459,11 +500,15 @@ function buildSubFilter(){
 }
 function filtered(){
   const q=qEl.value.trim().toLowerCase(), cl=fClass.value, su=fSub.value, ow=fOwned.value,
+        sz=fSize.value, gr=fGrade.value, kl=fKls.value,
         hasOwn=OWNMETA!==null||Object.keys(OWNED).length>0;
   let arr=BP.filter(b=>{
     if(q && !b._s.includes(q)) return false;
     if(cl && b.cls!==cl) return false;
     if(su && b.sub!==su) return false;
+    if(sz && b.sz!==sz) return false;
+    if(gr && b.gr!==gr) return false;
+    if(kl && b.kl!==kl) return false;
     if(hasOwn && ow==='yes' && !OWNED[b.name]) return false;
     if(hasOwn && ow==='no' && OWNED[b.name]) return false;
     return true;
@@ -474,6 +519,10 @@ function filtered(){
 }
 function recipeChips(b){
   return b.costs.map(c=>`<span class="chip"><span class="q">${c.q}×</span> ${esc(c.n)}${c.mq>0?`<span class="qbadge">Q≥${c.mq}</span>`:''}</span>`).join('');
+}
+function specBadge(b){
+  const p=[]; if(b.sz)p.push('S'+b.sz); if(b.gr)p.push(b.gr); if(b.kl)p.push(b.kl);
+  return p.length?`<div class="spec">${esc(p.join(' · '))}</div>`:'';
 }
 function srcLine(b){
   if(!b.src||!b.src.length) return `<div class="srcline"><span class="none">✖ ${t('srcNone')}</span></div>`;
@@ -487,6 +536,7 @@ function renderList(){
   let html=slice.map(b=>`
     <div class="bp${SEL[b.name]?' insel':''}${OWNED[b.name]?' own':''}" data-nm="${esc(b.name)}">
       <div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div>
+      ${specBadge(b)}
       <div class="recipe">${recipeChips(b)}</div>
       ${srcLine(b)}
       <div class="addbox"><input type="number" min="1" value="1" aria-label="qty"><button class="addbtn" type="button">+</button></div>
@@ -594,7 +644,7 @@ async function refresh(){
       if(!costs.length)continue;
       const src={}; for(const r of (b.rewards||[])){const cnm=cleanSrc(r.contractName||'');if(!cnm)continue;const ch=r.dropChance||0;if(!(cnm in src)||ch>src[cnm])src[cnm]=ch;}
       const cat=catByName[nm.toLowerCase()]||['Sonstiges','Sonstiges'];
-      out.push({name:nm,cls:cat[0],sub:cat[1],costs,src:Object.keys(src).sort().map(k=>({c:k,p:src[k]})),def:b.grantedByDefault?1:0});
+      out.push(Object.assign({name:nm,cls:cat[0],sub:cat[1],costs,src:Object.keys(src).sort().map(k=>({c:k,p:src[k]})),def:b.grantedByDefault?1:0},specOf((b.item||{}).description)));
     }
     out.sort((a,b)=>a.name.localeCompare(b.name));
     ingest({blueprints:out,classOrder:RAW.classOrder,generated:new Date().toISOString().slice(0,16).replace('T',' ')+' (live)',source:'live'});
@@ -607,7 +657,7 @@ async function refresh(){
 let qt=null;
 qEl.addEventListener('input',()=>{clearTimeout(qt);qt=setTimeout(()=>{renderCap=150;renderList();},130);});
 fClass.addEventListener('change',()=>{buildSubFilter();renderCap=150;renderList();});
-[fSub,fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
+[fSub,fSize,fGrade,fKls,fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
 listEl.addEventListener('click',e=>{
   if(e.target.id==='moreBtn'){renderCap+=200;renderList();return;}
   const add=e.target.closest('.addbtn'); if(add){const row=add.closest('.bp');addSel(row.dataset.nm,parseInt(row.querySelector('input').value,10)||1);}

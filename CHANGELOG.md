@@ -2,6 +2,17 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.2.0] – 2026-09-27
+
+### Hinzugefügt
+- **Klassifizierung von Komponenten/Waffen** (Größe · Grade · Klasse, z. B. „S1 · A · Civilian") aus der star-head-Beschreibung — auf jeder Kachel angezeigt und über drei neue **Filter** (Größe, Grade, Klasse) filterbar.
+- **Wechsel-Button** in der Kopfzeile zum [Wikelo-Ressourcen-Planer](https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/) (und umgekehrt).
+
+### Geändert
+- **Beschaffungsliste** steht jetzt **über** den verfügbaren Ressourcen und ist scrollbar (max. ~⅓ Bildschirmhöhe) — man braucht die Liste öfter als die Bestandseingabe.
+- **Speichern/Laden** (Zustand) in die zentrale Kopfzeile neben „Aktualisieren" verschoben und klar benannt.
+- Kategorie-Filter umbenannt zu „Kategorie/Unterkategorie" (macht „Klasse" für die Komponenten-Klasse frei).
+
 ## [1.1.0] – 2026-09-27
 
 ### Geändert
