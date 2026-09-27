@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.1.0] – 2026-09-27
+
+### Geändert
+- **Katalog (rechte Spalte) als Kachel-/Karten-Raster** statt Zeilenliste — Optik wie der Wikelo-Planer: responsives Grid (auto-fill), jede Karte mit Name + Unterklassen-Badge, Rezept-Chips, Quelle und „+"-Button unten; farbiger linker Akzent (Auswahl = Teal, erworben = Grün).
+
 ## [1.0.0] – 2026-09-27
 
 ### Hinzugefügt
@@ -14,4 +19,5 @@ Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog]
 - **SCDL-Import:** erworbene Baupläne aus dem SC-Deutsch-Launcher (`sc_bp_erledigt.json`) einlesen und markieren.
 - Zweisprachig (DE/EN), Hell/Dunkel, In-App-Refresh (Baupläne live neu laden), localStorage-Persistenz.
 
+[1.1.0]: https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer/releases/tag/v1.0.0

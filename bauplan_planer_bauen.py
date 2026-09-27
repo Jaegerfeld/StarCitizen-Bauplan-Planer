@@ -273,24 +273,25 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .selchip .st{cursor:pointer;border:none;background:none;color:var(--muted);font-weight:700;font-size:14px;padding:0 3px}
   .selempty{color:var(--muted);font-size:13.5px}
 
-  .list{max-height:74vh;overflow:auto;padding:8px}
-  .bp{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:11px 12px;border-radius:10px}
-  .bp+.bp{border-top:1px solid var(--line)}
-  .bp:hover{background:var(--panel2)}
-  .bp.insel{background:rgba(63,208,221,.06)}
+  .list{max-height:78vh;overflow:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-content:start}
+  .bp{display:flex;flex-direction:column;gap:7px;padding:13px 14px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);transition:.15s}
+  .bp:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .bp.insel{border-color:var(--accent);border-left-color:var(--accent);background:rgba(63,208,221,.05)}
+  .bp.own{border-left-color:var(--ok)}
+  .bp .hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
   .bp .nm{font-family:var(--disp);font-weight:700;font-size:16px}
   .bp .badge{font-family:var(--disp);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--line);border-radius:20px;padding:1px 8px;margin-left:8px;white-space:nowrap}
   .bp .owned{color:var(--ok);border-color:var(--ok)}
-  .bp .recipe{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .bp .recipe{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
   .chip{font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:2px 8px;white-space:nowrap}
   .chip .q{color:var(--accent2);font-weight:700}
-  .bp .srcline{grid-column:1/-1;font-size:12.5px;color:var(--muted);margin-top:1px}
+  .bp .srcline{font-size:12.5px;color:var(--muted);margin-top:1px}
   .bp .srcline .none{color:var(--bad)}
-  .addbox{display:flex;align-items:flex-start;gap:6px}
+  .addbox{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
   .addbox input{width:56px;text-align:center}
-  .addbtn{font-family:var(--disp);font-weight:700;font-size:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 11px;cursor:pointer}
+  .addbtn{font-family:var(--disp);font-weight:700;font-size:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 14px;cursor:pointer;margin-left:auto}
   .addbtn:hover{filter:brightness(1.08)}
-  .morebtn{display:block;width:100%;margin:8px 0 2px;text-align:center}
+  .morebtn{grid-column:1/-1;display:block;width:100%;margin:4px 0;text-align:center}
   .empty{color:var(--muted);font-size:14px;padding:16px}
 
   footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
@@ -484,11 +485,11 @@ function renderList(){
   document.getElementById('catCount').textContent=arr.length+' '+t('results');
   const slice=arr.slice(0,renderCap);
   let html=slice.map(b=>`
-    <div class="bp${SEL[b.name]?' insel':''}" data-nm="${esc(b.name)}">
-      <div><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div>
-      <div class="addbox"><input type="number" min="1" value="1" aria-label="qty"><button class="addbtn" type="button">+</button></div>
+    <div class="bp${SEL[b.name]?' insel':''}${OWNED[b.name]?' own':''}" data-nm="${esc(b.name)}">
+      <div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div>
       <div class="recipe">${recipeChips(b)}</div>
       ${srcLine(b)}
+      <div class="addbox"><input type="number" min="1" value="1" aria-label="qty"><button class="addbtn" type="button">+</button></div>
     </div>`).join('');
   if(arr.length>renderCap) html+=`<button class="btn morebtn" id="moreBtn" type="button">${t('more')(arr.length-renderCap)}</button>`;
   listEl.innerHTML=html||`<div class="empty">—</div>`;
