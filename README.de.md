@@ -12,7 +12,8 @@ Ein Standalone-HTML-Tool (offline lauffähig), das **alle craftbaren Star-Citize
 - **Erworben-Filter:** nach dem Import der eigenen Liste nur erworbene / nicht erworbene Baupläne zeigen.
 - **Beschaffungsliste:** Materialbedarf über die Auswahl summiert, abzüglich Bestand („noch benötigt"); Export als Text/CSV, Zustand als JSON.
 - **SCDL-Import (Zugabe):** erworbene Baupläne aus dem [SC-Deutsch-Launcher](https://sc-deutsch.de) (`sc_bp_erledigt.json`) einlesen und markieren.
-- Zweisprachig (DE/EN), Hell/Dunkel, In-App-Refresh (Baupläne live neu laden), localStorage-Persistenz.
+- Zweisprachig (DE/EN), Hell/Dunkel, localStorage-Persistenz.
+- **Täglich frische Daten:** die Online-Version wird jeden Tag neu gebaut (GitHub Actions, 05:00 UTC). Der Knopf „Neuesten Stand laden (GitHub)“ in der App holt die `data.json` dieses Builds von GitHub Pages – auch aus einer Offline-Kopie heraus – statt star-head direkt abzufragen.
 
 ## Nutzung
 

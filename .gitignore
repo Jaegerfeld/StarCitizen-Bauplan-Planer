@@ -18,5 +18,6 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Pages-Build
+# Pages-Build (data.json entsteht beim Bauen, wird nur auf Pages veröffentlicht)
 _site/
+data.json

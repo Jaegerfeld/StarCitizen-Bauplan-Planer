@@ -13,7 +13,8 @@ A single-file, offline HTML tool that lists **every craftable Star Citizen bluep
 - **Owned filter:** show only owned / not-owned blueprints after importing your own list.
 - **Procurement list:** material needs summed across your selection, minus your stock ("still needed"); export as text/CSV, save state as JSON.
 - **SCDL import (bonus):** load your owned blueprints from the [SC-Deutsch-Launcher](https://sc-deutsch.de) export (`sc_bp_erledigt.json`) to mark what you already have.
-- Bilingual (DE/EN), light/dark, in-app live refresh, localStorage persistence.
+- Bilingual (DE/EN), light/dark, localStorage persistence.
+- **Daily data:** the online version is rebuilt every day (GitHub Actions, 05:00 UTC). The in-app button "Load latest build (GitHub)" fetches that build's `data.json` from GitHub Pages — also from an offline copy — instead of hitting star-head directly.
 
 ## Usage
 

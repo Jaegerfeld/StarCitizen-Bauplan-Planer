@@ -2,6 +2,13 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.3.0] – 2026-10-25
+
+### Geändert
+- **Aktualisierung läuft über GitHub:** Die Online-Version wird täglich (05:00 UTC) per GitHub Actions neu gebaut; dabei entsteht neben der HTML eine `data.json` mit demselben Datenstand.
+- **Knopf „Aktualisieren“ → „Neuesten Stand laden (GitHub)“:** lädt die `data.json` des letzten Builds von GitHub Pages statt `api.star-head.de/blueprint` direkt aus dem Browser. Das schont die Community-API (eine Abfrage pro Tag statt eine pro Klick). Funktioniert auch aus der Offline-Kopie. Meldet, wenn der Stand schon aktuell ist.
+- Filter „alle Erworben“ heißt jetzt „alle“ (DE) bzw. „all“ (EN) – er meint alle Baupläne, ob erworben oder nicht.
+
 ## [1.2.0] – 2026-09-27
 
 ### Hinzugefügt

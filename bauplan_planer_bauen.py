@@ -26,6 +26,9 @@ from pathlib import Path
 BLUEPRINT_URL = "https://api.star-head.de/blueprint"
 HERE = Path(__file__).parent
 OUT_HTML = HERE / "SC_Bauplan_Planer.html"
+OUT_JSON = HERE / "data.json"
+# Veröffentlichter Datenstand (täglicher GitHub-Build); Quelle für den Knopf in der App.
+DATA_URL = "https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/data.json"
 
 _appdata = os.environ.get("APPDATA", "")
 ITMAP_CANDIDATES = [
@@ -212,6 +215,10 @@ def main() -> int:
     html = HTML_TEMPLATE.replace("/*__DATA__*/{}", payload)
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"Geschrieben: {OUT_HTML} ({OUT_HTML.stat().st_size // 1024} KB)")
+    # Gleicher Datenstand als eigene Datei: der Knopf "Neuesten Stand laden" in der
+    # App holt diese Datei von GitHub Pages statt direkt von star-head.
+    OUT_JSON.write_text(payload, encoding="utf-8")
+    print(f"Geschrieben: {OUT_JSON} ({OUT_JSON.stat().st_size // 1024} KB)")
     return 0
 
 
@@ -344,7 +351,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button class="btn" id="themeBtn" type="button"><span class="de">Hell / Dunkel</span><span class="en">Light / Dark</span></button>
       <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/" target="_blank" rel="noopener" title="Zum Wikelo-Ressourcen-Planer wechseln">🔀 <span class="de">Wikelo-Planer</span><span class="en">Wikelo Planner</span></a>
       <button class="btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden"><span class="de">📥 Erworbene (SCDL)</span><span class="en">📥 Import owned (SCDL)</span></button>
-      <button class="btn" id="refreshBtn" type="button" title="Baupläne live von star-head.de neu laden">🔄 <span class="de">Aktualisieren</span><span class="en">Refresh</span></button>
+      <button class="btn" id="refreshBtn" type="button" title="Neuesten täglich gebauten Datenstand von GitHub laden"><span class="de">🔄 Neuesten Stand laden (GitHub)</span><span class="en">🔄 Load latest build (GitHub)</span></button>
       <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">💾 <span class="de">Speichern</span><span class="en">Save</span></button>
       <button class="btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">📂 <span class="de">Laden</span><span class="en">Load</span></button>
       <div class="spacer"></div>
@@ -413,6 +420,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 const RAW = /*__DATA__*/{};
+const DATA_URL='https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/data.json';
+let CUR_GEN=RAW.generated||'';
 </script>
 <script>
 "use strict";
@@ -424,7 +433,7 @@ const I18N={
     owned:'erworben',added:'hinzugefügt',copied:'in Zwischenablage kopiert',have:'Bestand',
     orphan:'nicht im Katalog',orphanWarn:n=>`⚠ ${n} gewählte(r) Bauplan/Baupläne nicht im Katalog – nicht in der Summe enthalten.`,
     scdlOk:(n,u)=>`${n} erworbene erkannt${u?`, ${u} nicht im Katalog`:''}.`,scdlErr:'Datei nicht lesbar (sc_bp_erledigt.json erwartet).',
-    refOk:'Baupläne aktualisiert.',refErr:'star-head nicht erreichbar.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
+    refOk:'Neuester Stand geladen.',refErr:'GitHub nicht erreichbar – bestehende Daten bleiben.',refSame:'Du hast bereits den neuesten Stand.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
     results:'Treffer',more:n=>`… ${n} weitere anzeigen`},
   en:{ownAll:'all',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
     src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
@@ -432,7 +441,7 @@ const I18N={
     owned:'owned',added:'added',copied:'copied to clipboard',have:'stock',
     orphan:'not in catalog',orphanWarn:n=>`⚠ ${n} selected blueprint(s) not in catalog – excluded from totals.`,
     scdlOk:(n,u)=>`${n} owned detected${u?`, ${u} not in catalog`:''}.`,scdlErr:'File not readable (expected sc_bp_erledigt.json).',
-    refOk:'Blueprints refreshed.',refErr:'star-head unreachable.',stateOk:'State loaded.',stateErr:'State not readable.',
+    refOk:'Latest build loaded.',refErr:'GitHub unreachable – keeping current data.',refSame:'You already have the latest build.',stateOk:'State loaded.',stateErr:'State not readable.',
     results:'results',more:n=>`… show ${n} more`}
 };
 const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta'};
@@ -634,23 +643,21 @@ function importScdl(obj){
 
 /* ---------- refresh ---------- */
 async function refresh(){
+  // Lädt den zuletzt auf GitHub gebauten Datenstand (täglich). Kein Direktzugriff
+  // auf star-head aus dem Browser mehr – das schont die Community-API.
+  const btn=document.getElementById('refreshBtn'); if(btn.dataset.busy)return;
+  btn.dataset.busy='1'; btn.disabled=true;
   try{
-    const bp=await fetch('https://api.star-head.de/blueprint').then(r=>r.json());
-    const catByName={}; BP.forEach(b=>catByName[b.name.toLowerCase()]=[b.cls,b.sub]);
-    const out=[];
-    for(const b of bp){
-      const nm=(b.name||'').trim(); if(!nm)continue;
-      const costs=[]; for(const c of (b.costs||[])){const cn=(c.commodity||{}).name; if(cn)costs.push({n:cn,q:c.quantity||0,mq:c.minQuality||0});}
-      if(!costs.length)continue;
-      const src={}; for(const r of (b.rewards||[])){const cnm=cleanSrc(r.contractName||'');if(!cnm)continue;const ch=r.dropChance||0;if(!(cnm in src)||ch>src[cnm])src[cnm]=ch;}
-      const cat=catByName[nm.toLowerCase()]||['Sonstiges','Sonstiges'];
-      out.push(Object.assign({name:nm,cls:cat[0],sub:cat[1],costs,src:Object.keys(src).sort().map(k=>({c:k,p:src[k]})),def:b.grantedByDefault?1:0},specOf((b.item||{}).description)));
-    }
-    out.sort((a,b)=>a.name.localeCompare(b.name));
-    ingest({blueprints:out,classOrder:RAW.classOrder,generated:new Date().toISOString().slice(0,16).replace('T',' ')+' (live)',source:'live'});
+    const r=await fetch(DATA_URL,{cache:'no-store'}); if(!r.ok)throw new Error('HTTP '+r.status);
+    const raw=await r.json();
+    if(!raw||!Array.isArray(raw.blueprints)||!raw.blueprints.length)throw new Error('leer');
+    if(raw.generated&&raw.generated===CUR_GEN){toast(t('refSame'));return;}
+    CUR_GEN=raw.generated||'';
+    ingest(Object.assign({},raw,{source:'GitHub'}));
     buildClassFilter();renderRes();renderList();renderSel();renderMats();
     toast(t('refOk'));
   }catch(e){toast(t('refErr'));}
+  finally{btn.dataset.busy='';btn.disabled=false;}
 }
 
 /* ---------- events ---------- */
