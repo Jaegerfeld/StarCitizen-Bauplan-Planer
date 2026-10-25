@@ -350,6 +350,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button class="btn" id="langBtn" type="button">EN / DE</button>
       <button class="btn" id="themeBtn" type="button"><span class="de">Hell / Dunkel</span><span class="en">Light / Dark</span></button>
       <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/" target="_blank" rel="noopener" title="Zum Wikelo-Ressourcen-Planer wechseln">🔀 <span class="de">Wikelo-Planer</span><span class="en">Wikelo Planner</span></a>
+      <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Handels-Planer/" target="_blank" rel="noopener" title="Zum Handels-Planer wechseln">🔀 <span class="de">Handels-Planer</span><span class="en">Trade Planner</span></a>
+      <a class="btn swap" href="https://jaegerfeld.github.io/sc-guides/" target="_blank" rel="noopener" title="Zur Übersicht aller Guides und Planer">📚 <span class="de">Guides-Übersicht</span><span class="en">Guides overview</span></a>
       <button class="btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden"><span class="de">📥 Erworbene (SCDL)</span><span class="en">📥 Import owned (SCDL)</span></button>
       <button class="btn" id="refreshBtn" type="button" title="Neuesten täglich gebauten Datenstand von GitHub laden"><span class="de">🔄 Neuesten Stand laden (GitHub)</span><span class="en">🔄 Load latest build (GitHub)</span></button>
       <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">💾 <span class="de">Speichern</span><span class="en">Save</span></button>

@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.3.1] – 2026-10-25
+
+### Hinzugefügt
+- Kopfzeile: Links zum **Handels-Planer** und zur **Guides-Übersicht** (jaegerfeld.github.io/sc-guides), damit man von jedem Planer zurück zur Übersichtsseite kommt.
+
 ## [1.3.0] – 2026-10-25
 
 ### Geändert
