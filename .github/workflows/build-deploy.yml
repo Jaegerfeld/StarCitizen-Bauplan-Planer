@@ -1,8 +1,12 @@
 name: Build & Deploy
 
 # Baut die App neu (frische star-head-Baupläne) und veröffentlicht sie
-# als Online-Version auf GitHub Pages. Nur bei Push auf main + manuell.
+# als Online-Version auf GitHub Pages: täglich per Zeitplan, bei Push auf
+# main und manuell. star-head wird so nur einmal am Tag abgefragt; der Knopf
+# in der App lädt den fertigen Stand (data.json) von Pages, nicht von star-head.
 on:
+  schedule:
+    - cron: "0 5 * * *"   # täglich 05:00 UTC
   push:
     branches: [main]
   workflow_dispatch:
@@ -30,6 +34,7 @@ jobs:
         run: |
           mkdir -p _site
           cp SC_Bauplan_Planer.html _site/index.html
+          cp data.json _site/data.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
