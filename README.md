@@ -12,6 +12,7 @@ A single-file, offline HTML tool that lists **every craftable Star Citizen bluep
 - **Two-level category filter:** class (Armor, Helmets, FPS weapons, Ship weapons, Ship components, Tools …) → dependent subclass (Light/Heavy Armor, Pistol, Rifle …). *(Category labels are in German even in EN mode; blueprint and material names come from star-head in English.)*
 - **Owned filter:** show only owned / not-owned blueprints after importing your own list.
 - **Selected only:** a toggle in the filter bar shows just your selected blueprints; the other filters still apply.
+- **Tile images:** thumbnails from the [Star Citizen Wiki](https://starcitizen.tools/) (linked, © CIG); own captures in `bilder/` take precedence – format in [`bilder/LIESMICH.md`](bilder/LIESMICH.md) (German). Offline, tiles show no image.
 - **Procurement list:** material needs summed across your selection, minus your stock ("still needed"); export as text/CSV, save state as JSON.
 - **SCDL import (bonus):** load your owned blueprints from the [SC-Deutsch-Launcher](https://sc-deutsch.de) export (`sc_bp_erledigt.json`) to mark what you already have.
 - Bilingual (DE/EN), light/dark, localStorage persistence.

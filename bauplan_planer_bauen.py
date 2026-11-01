@@ -15,12 +15,13 @@ Aufruf (überall lauffähig, Pfade relativ zum Skript):
 """
 from __future__ import annotations
 
+import concurrent.futures as cf
 import json
 import os
 import re
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 BLUEPRINT_URL = "https://api.star-head.de/blueprint"
@@ -29,6 +30,18 @@ OUT_HTML = HERE / "SC_Bauplan_Planer.html"
 OUT_JSON = HERE / "data.json"
 # Veröffentlichter Datenstand (täglicher GitHub-Build); Quelle für den Knopf in der App.
 DATA_URL = "https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/data.json"
+
+# Kachel-Bilder: eigene Aufnahmen haben Vorrang, sonst Vorschaubild aus dem Star Citizen Wiki.
+# Die Bilder werden nur verlinkt (Hotlink), nicht ins Repo kopiert.
+OWN_DIR = HERE / "bilder"                       # eigene Bilder: bilder/<gameId>.webp|png|jpg
+WIKI_ITEM_URL = "https://api.star-citizen.wiki/api/v2/items/"
+WIKI_SOURCES = {"starcitizen.tools": "w", "star-citizen.wiki": "c"}   # nur Wiki-Quellen
+THUMB_PX = 160
+IMG_MISS_DAYS = 7          # ohne Bild: nach einer Woche erneut im Wiki nachsehen
+IMG_HIT_DAYS = 30          # mit Bild: nach 30 Tagen auffrischen ...
+IMG_REFRESH_MAX = 150      # ... aber höchstens so viele pro Lauf (schont die Wiki-API)
+_THUMB_RE = re.compile(r"/(\d+)px-")
+_MEDIA_RE = re.compile(r"^(https://media\.starcitizen\.tools)/([0-9a-f])/([0-9a-f]{2})/([^/?]+)")
 
 _appdata = os.environ.get("APPDATA", "")
 ITMAP_CANDIDATES = [
@@ -151,6 +164,125 @@ def spec_fields(desc: str) -> dict:
     return out
 
 
+def thumb_url(url: str) -> str:
+    """Wiki-Bild-URL auf ein kleines Vorschaubild (THUMB_PX breit) umstellen.
+
+    starcitizen.tools: vorhandenen Thumb-Pfad auf THUMB_PX setzen oder aus dem Original
+    einen MediaWiki-Thumb-Pfad bauen. Andere Quellen bleiben, wie sie sind."""
+    if "/thumb/" in url and _THUMB_RE.search(url):
+        return _THUMB_RE.sub(f"/{THUMB_PX}px-", url, count=1)
+    m = _MEDIA_RE.match(url)
+    if m:
+        host, a, ab, fn = m.groups()
+        tail = ".webp" if not fn.lower().endswith(".webp") else ""
+        return f"{host}/thumb/{a}/{ab}/{fn}/{THUMB_PX}px-{fn}{tail}"
+    return url
+
+
+def wiki_image(gid: str) -> tuple[str, str]:
+    """(Vorschau-URL, Quellenkürzel) aus der Wiki-API; ('', '') ohne Wiki-Bild."""
+    try:
+        d = get_json(WIKI_ITEM_URL + gid, timeout=30).get("data") or {}
+    except Exception:  # noqa: BLE001 (404 = Gegenstand fehlt im Wiki)
+        return "", ""
+    imgs = d.get("images") or []
+    for wanted in WIKI_SOURCES:               # starcitizen.tools zuerst
+        for im in imgs:
+            if im.get("source") == wanted and im.get("thumbnail_url"):
+                return thumb_url(im["thumbnail_url"]), WIKI_SOURCES[wanted]
+    return "", ""
+
+
+def load_img_cache() -> dict[str, list]:
+    """Bild-Cache {gameId: [url, quelle, datum]} aus der lokalen und der veröffentlichten
+    data.json zusammenführen (jeweils den jüngeren Eintrag). So fragt der tägliche Build
+    nur neue oder fällige Gegenstände im Wiki ab."""
+    cache: dict[str, list] = {}
+    sources = []
+    if OUT_JSON.exists():
+        try:
+            sources.append(json.loads(OUT_JSON.read_text(encoding="utf-8")))
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        sources.append(get_json(DATA_URL, timeout=30))
+    except Exception:  # noqa: BLE001
+        print("  Hinweis: veröffentlichte data.json nicht erreichbar – Bild-Cache nur lokal.")
+    for src in sources:
+        for gid, val in (src.get("imgCache") or {}).items():
+            if gid not in cache or val[2] > cache[gid][2]:
+                cache[gid] = val
+    return cache
+
+
+def own_images() -> dict[str, str]:
+    """Eigene Bilder im Ordner bilder/: {gameId: relativer Pfad}."""
+    out = {}
+    if OWN_DIR.is_dir():
+        for p in sorted(OWN_DIR.iterdir()):
+            if p.suffix.lower() in (".webp", ".png", ".jpg", ".jpeg"):
+                out[p.stem.lower()] = f"bilder/{p.name}"
+    return out
+
+
+def attach_images(entries: list[dict]) -> dict[str, list]:
+    """Jedem Bauplan ein Bild zuordnen (img = URL, imgs = 'e' eigen / 'w' / 'c' Wiki)."""
+    own = own_images()
+    cache = load_img_cache()
+    today = date.today()
+    due_new, due_old = [], []
+    for gid in sorted({e["gid"] for e in entries if e["gid"]} - set(own)):
+        hit = cache.get(gid)
+        if not hit:
+            due_new.append(gid)
+            continue
+        age = (today - date.fromisoformat(hit[2])).days
+        if (not hit[0] and age >= IMG_MISS_DAYS) or (hit[0] and age >= IMG_HIT_DAYS):
+            due_old.append((hit[2], gid))
+    due = due_new + [g for _, g in sorted(due_old)[:IMG_REFRESH_MAX]]
+    if due:
+        print(f"  Wiki-Bilder: {len(due_new)} neu, {len(due) - len(due_new)} aufzufrischen ...")
+        with cf.ThreadPoolExecutor(4) as ex:
+            for gid, (url, src) in zip(due, ex.map(wiki_image, due), strict=True):
+                cache[gid] = [url, src, today.isoformat()]
+    n_own = n_wiki = 0
+    for e in entries:
+        gid = e["gid"].lower()
+        if gid in own:
+            e["img"], e["imgs"] = own[gid], "e"
+            n_own += 1
+        elif cache.get(e["gid"], ["", ""])[0]:
+            e["img"], e["imgs"] = cache[e["gid"]][0], cache[e["gid"]][1]
+            n_wiki += 1
+    print(f"  Bilder: {n_own} eigene, {n_wiki} aus dem Wiki, "
+          f"{len(entries) - n_own - n_wiki} ohne Bild.")
+    used = {e["gid"] for e in entries}
+    return {g: v for g, v in cache.items() if g in used}
+
+
+_SCT_THUMB = re.compile(
+    r"^https://media\.starcitizen\.tools/thumb/([0-9a-f]/[0-9a-f]{2})/([^/]+)/"
+    + str(THUMB_PX) + r"px-\2\.webp(\?\w+)?$")
+MISSING_CSV = HERE / "bilder_fehlend.csv"
+
+
+def compact_entry(e: dict) -> dict:
+    """Für die Seite: gameId weglassen, starcitizen.tools-Thumb als '~a/ab/Datei?q' kürzen."""
+    out = {k: v for k, v in e.items() if k != "gid"}
+    m = _SCT_THUMB.match(out.get("img", ""))
+    if m:
+        out["img"] = "~" + m.group(1) + "/" + m.group(2) + (m.group(3) or "")
+    return out
+
+
+def write_missing_list(entries: list[dict]) -> None:
+    """Arbeitsliste für eigene Aufnahmen: Baupläne ohne Bild (gameId;Name;Kategorie)."""
+    rows = sorted((e["cls"], e["name"], e["gid"]) for e in entries if not e.get("img"))
+    lines = ["gameId;name;kategorie"] + [f"{g};{n};{c}" for c, n, g in rows]
+    MISSING_CSV.write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
+    print(f"Geschrieben: {MISSING_CSV.name} ({len(rows)} Baupläne ohne Bild)")
+
+
 def build_data() -> dict:
     """Baupläne laden und auf das schlanke App-Schema reduzieren."""
     print("Lade Baupläne (star-head.de) ...")
@@ -188,6 +320,7 @@ def build_data() -> dict:
             "costs": costs,
             "src": sources,
             "def": 1 if b.get("grantedByDefault") else 0,
+            "gid": str((b.get("item") or {}).get("gameId") or ""),
         }
         entry.update(spec_fields((b.get("item") or {}).get("description") or ""))
         out.append(entry)
@@ -196,8 +329,10 @@ def build_data() -> dict:
     n_src = sum(1 for x in out if x["src"])
     mats = {c["n"] for x in out for c in x["costs"]}
     print(f"  {len(out)} Baupläne mit Rezept, {n_src} mit Quelle, {len(mats)} Materialien.")
+    img_cache = attach_images(out)
     return {
         "blueprints": out,
+        "imgCache": img_cache,
         "classOrder": CLASS_ORDER,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "n": len(out),
@@ -212,7 +347,13 @@ def main() -> int:
         return 1
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     payload = payload.replace("</", "<\\/")  # kein vorzeitiges </script>
-    html = HTML_TEMPLATE.replace("/*__DATA__*/{}", payload)
+    # Der Bild-Cache (Prüfdaten je gameId) gehört nur in data.json, nicht in die Seite;
+    # in der Seite werden gameId weggelassen und Wiki-Thumb-URLs gekürzt (siehe imgUrl im JS).
+    page = {k: v for k, v in data.items() if k != "imgCache"}
+    page["blueprints"] = [compact_entry(e) for e in data["blueprints"]]
+    write_missing_list(data["blueprints"])
+    page_payload = json.dumps(page, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    html = HTML_TEMPLATE.replace("/*__DATA__*/{}", page_payload)
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"Geschrieben: {OUT_HTML} ({OUT_HTML.stat().st_size // 1024} KB)")
     # Gleicher Datenstand als eigene Datei: der Knopf "Neuesten Stand laden" in der
@@ -306,6 +447,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .bp.insel{border-color:var(--accent);border-left-color:var(--accent);background:rgba(63,208,221,.05)}
   .bp.own{border-left-color:var(--ok)}
   .bp .hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .bp .top{display:flex;gap:10px;align-items:flex-start}
+  .bp .top .hd{flex:1;min-width:0}
+  .bp .pic{flex:0 0 72px;width:72px;height:72px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .bp .pic img{width:100%;height:100%;object-fit:contain;display:block}
+  .bp .pic.none{display:none}
+  .bp .pic .ph{font-family:var(--disp);font-size:10px;color:var(--muted);text-align:center;line-height:1.1;padding:2px}
   .bp .nm{font-family:var(--disp);font-weight:700;font-size:16px}
   .bp .badge{font-family:var(--disp);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--line);border-radius:20px;padding:1px 8px;margin-left:8px;white-space:nowrap}
   .bp .owned{color:var(--ok);border-color:var(--ok)}
@@ -417,6 +564,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <footer>
     <p><span class="de">Daten: star-head.de (Baupläne/Rezepte) · Kategorien: SC-Deutsch-Launcher-Typen. Erworbene Baupläne per SCDL-Export (<code>sc_bp_erledigt.json</code>). Rezepte patch-abhängig.</span><span class="en">Data: star-head.de (blueprints/recipes) · categories from SC-Deutsch-Launcher types. Owned blueprints via SCDL export (<code>sc_bp_erledigt.json</code>). Recipes patch-dependent.</span></p>
+    <p><span class="de">Bilder: <a href="https://starcitizen.tools/" target="_blank" rel="noopener">Star Citizen Wiki</a> (verlinkt, werden beim Ansehen von dort geladen) und eigene Aufnahmen · Spielinhalte © Cloud Imperium Games. Ohne Internet bleiben die Kacheln ohne Bild.</span><span class="en">Images: <a href="https://starcitizen.tools/" target="_blank" rel="noopener">Star Citizen Wiki</a> (linked, loaded from there when viewed) and own captures · game content © Cloud Imperium Games. Offline, tiles show no images.</span></p>
     <p><span id="footStat"></span> · <span class="de">Inoffiziell, nicht mit CIG verbunden. Alle Angaben ohne Gewähr.</span><span class="en">Unofficial, not affiliated with CIG. No guarantee.</span></p>
   </footer>
 </div>
@@ -443,7 +591,8 @@ const I18N={
     refOk:'Neuester Stand geladen.',refErr:'GitHub nicht erreichbar – bestehende Daten bleiben.',refSame:'Du hast bereits den neuesten Stand.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
     results:'Treffer',more:n=>`… ${n} weitere anzeigen`,
     onlySel:'nur ausgewählte',onlySelTip:'Katalog auf die gewählten Baupläne beschränken (andere Filter gelten weiter)',
-    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen'},
+    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen',
+    imgWiki:'Bild: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Bild: eigene Aufnahme · © CIG'},
   en:{ownAll:'all',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
     src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
     selEmpty:'No blueprints selected yet – click “+” in the catalog.',matEmpty:'Select blueprints to see the material needs.',
@@ -453,7 +602,8 @@ const I18N={
     refOk:'Latest build loaded.',refErr:'GitHub unreachable – keeping current data.',refSame:'You already have the latest build.',stateOk:'State loaded.',stateErr:'State not readable.',
     results:'results',more:n=>`… show ${n} more`,
     onlySel:'selected only',onlySelTip:'Limit the catalog to your selected blueprints (other filters still apply)',
-    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters'}
+    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters',
+    imgWiki:'Image: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Image: own capture · © CIG'}
 };
 const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta',onlySel:'scbp_onlysel'};
 const root=document.documentElement;
@@ -563,6 +713,19 @@ function srcLine(b){
   const parts=b.src.slice(0,3).map(s=>esc(s.c)+(s.p<100?` (${s.p}%)`:''));
   return `<div class="srcline">▸ ${t('src')}: ${parts.join(' · ')}${b.src.length>3?` +${b.src.length-3}`:''}</div>`;
 }
+/* Kachel-Bild: eigenes Bild (bilder/<gameId>) oder Vorschau aus dem Star Citizen Wiki (verlinkt).
+   Lädt erst beim Hineinscrollen; schlägt das Laden fehl (offline, Bild entfernt), verschwindet der Rahmen. */
+const IMG_SRC={e:'imgOwn',w:'imgWiki',c:'imgWiki'};
+function imgUrl(s){   // '~a/ab/Datei?q' -> starcitizen.tools-Thumb (160 px); volle URLs bleiben
+  if(!s||s[0]!=='~') return s||'';
+  const m=/^~([0-9a-f]\/[0-9a-f]{2})\/([^?]+)(\?.*)?$/.exec(s); if(!m) return '';
+  return `https://media.starcitizen.tools/thumb/${m[1]}/${m[2]}/160px-${m[2]}.webp${m[3]||''}`;
+}
+function picHtml(b){
+  if(!b.img) return '';
+  const tip=t(IMG_SRC[b.imgs]||'imgWiki');
+  return `<div class="pic" title="${esc(tip)}"><img src="${esc(imgUrl(b.img))}" alt="${esc(b.name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('none')"></div>`;
+}
 function renderList(){
   syncOnlySel();
   const arr=filtered();
@@ -570,7 +733,7 @@ function renderList(){
   const slice=arr.slice(0,renderCap);
   let html=slice.map(b=>`
     <div class="bp${SEL[b.name]?' insel':''}${OWNED[b.name]?' own':''}" data-nm="${esc(b.name)}">
-      <div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div>
+      <div class="top">${picHtml(b)}<div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div></div>
       ${specBadge(b)}
       <div class="recipe">${recipeChips(b)}</div>
       ${srcLine(b)}

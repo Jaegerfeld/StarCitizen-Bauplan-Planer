@@ -11,6 +11,7 @@ Ein Standalone-HTML-Tool (offline lauffähig), das **alle craftbaren Star-Citize
 - **Zweistufiger Kategoriefilter:** Klasse (Rüstung, Helme, FPS-Waffen, Schiffswaffen, Schiffskomponenten, Werkzeuge …) → abhängige Unterklasse (Leichte/Schwere Rüstung, Pistole, Gewehr …).
 - **Erworben-Filter:** nach dem Import der eigenen Liste nur erworbene / nicht erworbene Baupläne zeigen.
 - **Nur ausgewählte:** Schalter in der Filterleiste zeigt nur die gewählten Baupläne; die übrigen Filter gelten weiter.
+- **Bilder in den Kacheln:** Vorschaubilder aus dem [Star Citizen Wiki](https://starcitizen.tools/) (verlinkt, © CIG), eigene Aufnahmen im Ordner `bilder/` haben Vorrang – Format siehe [`bilder/LIESMICH.md`](bilder/LIESMICH.md). Offline bleiben die Kacheln ohne Bild.
 - **Beschaffungsliste:** Materialbedarf über die Auswahl summiert, abzüglich Bestand („noch benötigt"); Export als Text/CSV, Zustand als JSON.
 - **SCDL-Import (Zugabe):** erworbene Baupläne aus dem [SC-Deutsch-Launcher](https://sc-deutsch.de) (`sc_bp_erledigt.json`) einlesen und markieren.
 - Zweisprachig (DE/EN), Hell/Dunkel, localStorage-Persistenz.

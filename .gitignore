@@ -21,3 +21,6 @@ Thumbs.db
 # Pages-Build (data.json entsteht beim Bauen, wird nur auf Pages veröffentlicht)
 _site/
 data.json
+
+# Arbeitsliste für eigene Bilder (entsteht beim Bauen)
+bilder_fehlend.csv

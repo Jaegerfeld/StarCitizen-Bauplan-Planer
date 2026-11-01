@@ -2,6 +2,16 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.5.0] – 2026-11-01
+
+### Hinzugefügt
+- **Bilder in den Kacheln:** Jede Kachel zeigt ein kleines Bild des Gegenstands (72 × 72 px). Quelle ist das Vorschaubild aus dem **Star Citizen Wiki**, zugeordnet über die Spiel-Kennung (`gameId`) aus star-head; die Bilder werden nur verlinkt, nicht ins Repo kopiert. Stand des ersten Laufs: 1.312 von 1.585 Bauplänen mit Bild. Rüstungsteile (Core/Arms/Legs) zeigen meist das Bild des ganzen Sets.
+- **Eigene Bilder** im Ordner `bilder/` (`<gameId>.webp`) haben Vorrang vor dem Wiki; Format und Nachweis in `bilder/LIESMICH.md`. Der Build schreibt die Arbeitsliste `bilder_fehlend.csv` mit allen Bauplänen ohne Bild.
+- Bilder laden erst beim Hineinscrollen; lädt ein Bild nicht (z. B. offline), bleibt die Kachel ohne Bildrahmen. Quellenvermerk im Tooltip und in der Fußzeile.
+
+### Geändert
+- Der Build merkt sich die Wiki-Zuordnung in `data.json` (`imgCache`) und fragt danach nur neue Gegenstände ab; ohne Bild wird nach 7 Tagen erneut geschaut, Treffer werden nach 30 Tagen aufgefrischt (höchstens 150 pro Lauf).
+
 ## [1.4.0] – 2026-11-01
 
 ### Hinzugefügt
