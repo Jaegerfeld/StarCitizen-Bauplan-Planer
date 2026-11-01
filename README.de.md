@@ -8,7 +8,7 @@ Ein Standalone-HTML-Tool (offline lauffähig), das **alle craftbaren Star-Citize
 
 - **Kompletter Katalog** aller craftbaren Baupläne von [star-head.de](https://star-head.de) (~1585), je mit Rezept (Material × Menge, Mindestqualität) und dem Kontrakt, der ihn droppt.
 - **Layout wie der Wikelo-Planer:** links die **verfügbaren Ressourcen** eingeben, rechts die **Baupläne auswählen**.
-- **Zweistufiger Kategoriefilter:** Klasse (Rüstung, Helme, FPS-Waffen, Schiffswaffen, Schiffskomponenten, Werkzeuge …) → abhängige Unterklasse (Leichte/Schwere Rüstung, Pistole, Gewehr …).
+- **Zweistufiger Kategoriefilter mit Mehrfachauswahl:** Klasse (Rüstung, Helme, FPS-Waffen, Schiffswaffen, Schiffskomponenten, Werkzeuge …) → abhängige Unterklasse (Leichte/Schwere Rüstung, Pistole, Gewehr …); ebenso Größe, Grade und Klasse – jeweils mehrere Werte ankreuzbar.
 - **Erworben-Filter:** nach dem Import der eigenen Liste nur erworbene / nicht erworbene Baupläne zeigen.
 - **Nur ausgewählte:** Schalter in der Filterleiste zeigt nur die gewählten Baupläne; die übrigen Filter gelten weiter.
 - **Bilder in den Kacheln:** Vorschaubilder aus dem [Star Citizen Wiki](https://starcitizen.tools/) (verlinkt, © CIG), eigene Aufnahmen im Ordner `bilder/` haben Vorrang – Format siehe [`bilder/LIESMICH.md`](bilder/LIESMICH.md). Offline bleiben die Kacheln ohne Bild.
