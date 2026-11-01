@@ -25,6 +25,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import kopfzeile as kz
+import sc_design as sd
 from version import VERSION
 
 BLUEPRINT_URL = "https://api.star-head.de/blueprint"
@@ -347,11 +348,7 @@ def fill_header(html: str) -> str:
     b = kz.bi
     actions = (
         '<button class="btn fh-btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden">'
-        f'📥 {b("Erworbene (SCDL)", "Import owned (SCDL)")}</button>'
-        '<button class="btn fh-btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">'
-        f'💾 {b("Speichern", "Save")}</button>'
-        '<button class="btn fh-btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">'
-        f'📂 {b("Laden", "Load")}</button>')
+        f'📥 {b("Erworbene (SCDL)", "Import owned (SCDL)")}</button>')
     refresh = ('<button class="btn fh-btn" id="refreshBtn" type="button" title="Neuesten täglich gebauten Datenstand von GitHub laden">'
                f'🔄 {b("Neuesten Stand laden (GitHub)", "Load latest build (GitHub)")}</button>')
     head = kz.header_html(
@@ -365,7 +362,8 @@ def fill_header(html: str) -> str:
         version=VERSION, actions=actions, refresh=refresh,
         data='<span id="buildStat"></span>')
     html = html.replace("<!--FH_HEADER-->", head)
-    html = html.replace("/*FH_CSS*/", kz.CSS).replace("/*FH_JS*/", kz.JS)
+    html = html.replace("/*FH_CSS*/", kz.CSS + sd.CSS).replace("/*FH_JS*/", kz.JS + sd.JS)
+    html = html.replace("<!--SD_FONTS-->", sd.FONTS)
     return html.replace("<!--FH_DIALOG-->", kz.dialog_html("bauplan", VERSION) + "\n"
                         + kz.changelog_script(HERE / "CHANGELOG.md"))
 
@@ -403,9 +401,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SC Bauplan-Planer</title>
 <meta name="description" content="Alle craftbaren Star-Citizen-Baupläne: Materialbedarf, Bestandsabgleich und exportierbare Beschaffungslisten.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<!--SD_FONTS-->
 <style>
   :root{
     --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef1f5; --ink:#141922; --muted:#5a6472;
@@ -535,6 +531,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .left{position:static;max-height:none}
     .list{max-height:none}
   }
+  .statebar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 14px 12px;border-top:1px dashed var(--line)}
+  .statebar .statelbl{font-family:var(--disp);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+  .cols>*{min-width:0}
+  .statebar .statelbl{flex:1 1 100%;margin:0 0 2px}
+  .fmorebtn{display:none}
+  @media(max-width:919px){.left{gap:0}.left .card{margin-bottom:0}}
+  @media(max-width:600px){.fmorebtn{display:inline-flex;align-items:center;gap:4px}.filters:not(.showmore) .fopt{display:none}.filters{padding:10px}.filters input[type=search]{flex:1 1 100%}.list{grid-template-columns:1fr;max-height:none;padding:10px}}
 /*FH_CSS*/
 </style>
 </head>
@@ -543,10 +546,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div class="wrap">
 <!--FH_HEADER-->
 
+  <div class="sc-ptabs" id="bpTabs"></div>
   <div class="cols">
     <!-- LINKS: BESCHAFFUNG (oben, scrollbar) + RESSOURCEN -->
     <div class="left">
-      <div class="card">
+      <div class="card" id="cardList">
         <div class="ph"><span class="de">Beschaffungsliste</span><span class="en">Procurement list</span><span class="n" id="matN"></span></div>
         <div class="pbody scrollcap" id="matBody"></div>
         <p class="note"><span class="de">Materialien sind raffinierte Rohstoffe – kaufbar an Raffinerien/TDD oder selbst raffinieren.</span><span class="en">Materials are refined commodities – buy at refineries/TDD or refine them yourself.</span></p>
@@ -555,9 +559,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <button class="btn" id="txtBtn" type="button">⬇ .txt</button>
           <button class="btn" id="csvBtn" type="button">⬇ .csv</button>
         </div>
+        <div class="statebar">
+          <span class="statelbl"><span class="de">Auswahl &amp; Bestand</span><span class="en">Selection &amp; stock</span></span>
+          <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">💾 <span class="de">Speichern</span><span class="en">Save</span></button>
+          <button class="btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">📂 <span class="de">Laden</span><span class="en">Load</span></button>
+        </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="cardRes">
         <div class="ph"><span class="de">Verfügbare Ressourcen</span><span class="en">Available resources</span><span class="n" id="resN"></span></div>
         <div class="restools">
           <button class="btn" id="resClear" type="button" style="padding:4px 9px;font-size:12px"><span class="de">alle 0</span><span class="en">reset</span></button>
@@ -568,20 +577,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <!-- RECHTS: FILTER + AUSWAHL + KATALOG -->
-    <div class="card">
+    <div class="card" id="cardCat">
       <div class="filters">
         <input type="search" id="q" placeholder="Suchen … (Name / Material)" autocomplete="off">
         <details class="ms" id="fClass"></details>
         <details class="ms" id="fSub"></details>
-        <details class="ms" id="fSize"></details>
-        <details class="ms" id="fGrade"></details>
-        <details class="ms" id="fKls"></details>
-        <select id="fOwned" disabled>
+        <button class="btn fmorebtn" id="fMoreBtn" type="button" aria-expanded="false"><span class="de">Weitere Filter</span><span class="en">More filters</span> <span id="fMoreN"></span></button>
+        <details class="ms fopt" id="fSize"></details>
+        <details class="ms fopt" id="fGrade"></details>
+        <details class="ms fopt" id="fKls"></details>
+        <select id="fOwned" class="fopt" disabled>
           <option value="all" data-i18n="ownAll">alle</option>
           <option value="yes" data-i18n="ownYes">nur erworben</option>
           <option value="no" data-i18n="ownNo">nur nicht erworben</option>
         </select>
-        <select id="fSort">
+        <select id="fSort" class="fopt">
           <option value="name" data-i18n="sortName">Name A–Z</option>
           <option value="mats" data-i18n="sortMats">wenigste Materialien</option>
         </select>
@@ -615,7 +625,7 @@ let CUR_GEN=RAW.generated||'';
 const I18N={
   de:{ownAll:'alle',ownYes:'nur erworben',ownNo:'nur nicht erworben',sortName:'Name A–Z',sortMats:'wenigste Materialien',
     src:'Quelle',srcNone:'Quelle unbekannt',mat:'Material',need:'benötigt',left:'noch',allClass:'alle Kategorien',allSub:'alle Unterkategorien',allSize:'alle Größen',allGrade:'alle Grade',allKls:'alle Klassen',
-    selEmpty:'Noch keine Baupläne gewählt – rechts im Katalog „+" klicken.',matEmpty:'Wähle Baupläne, um den Materialbedarf zu sehen.',
+    selEmpty:'Noch keine Baupläne gewählt – im Katalog „+" klicken.',matEmpty:'Wähle Baupläne, um den Materialbedarf zu sehen.',
     owned:'erworben',added:'hinzugefügt',copied:'in Zwischenablage kopiert',have:'Bestand',
     orphan:'nicht im Katalog',orphanWarn:n=>`⚠ ${n} gewählte(r) Bauplan/Baupläne nicht im Katalog – nicht in der Summe enthalten.`,
     scdlOk:(n,u)=>`${n} erworbene erkannt${u?`, ${u} nicht im Katalog`:''}.`,scdlErr:'Datei nicht lesbar (sc_bp_erledigt.json erwartet).',
@@ -798,7 +808,7 @@ function picHtml(b){
   return `<div class="pic" title="${esc(tip)}"><img src="${esc(imgUrl(b.img))}" alt="${esc(b.name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('none')"></div>`;
 }
 function renderList(){
-  syncOnlySel();
+  syncOnlySel(); syncMoreN();
   const arr=filtered();
   document.getElementById('catCount').textContent=arr.length+' '+t('results');
   const slice=arr.slice(0,renderCap);
@@ -821,6 +831,7 @@ function renderList(){
 function addSel(name,qty){SEL[name]=(SEL[name]||0)+Math.max(1,qty|0);save(LS.sel,SEL);renderSel();renderMats();renderList();toast(t('added'));}
 function setSel(name,qty){if(qty<=0)delete SEL[name];else SEL[name]=qty;save(LS.sel,SEL);renderSel();renderMats();renderList();}
 function renderSel(){
+  if(window.BP_TABS) BP_TABS.count('list',Object.keys(SEL).length);
   const keys=Object.keys(SEL);
   const bar=document.getElementById('selBar');
   if(!keys.length){bar.innerHTML=`<span class="selempty">${t('selEmpty')}</span>`;return;}
@@ -929,6 +940,8 @@ qEl.addEventListener('input',()=>{clearTimeout(qt);qt=setTimeout(()=>{renderCap=
 fClass.addEventListener('mschange',()=>{buildSubFilter();renderCap=150;renderList();});
 [fSub,fSize,fGrade,fKls].forEach(el=>el.addEventListener('mschange',()=>{renderCap=150;renderList();}));
 [fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
+document.getElementById('fMoreBtn').addEventListener('click',e=>{const f=e.currentTarget.closest('.filters');const on=f.classList.toggle('showmore');e.currentTarget.setAttribute('aria-expanded',on?'true':'false');});
+function syncMoreN(){const n=['fSize','fGrade','fKls'].reduce((a,k)=>a+(MS[k]&&MS[k].sel.size?1:0),0)+(fOwned.value!=='all'?1:0);document.getElementById('fMoreN').textContent=n?'('+n+')':'';}
 onlySelBtn.addEventListener('click',()=>{ONLY_SEL=!ONLY_SEL;save(LS.onlySel,ONLY_SEL);renderCap=150;renderList();});
 listEl.addEventListener('click',e=>{if(e.target.closest('#resetF'))resetFilters();});
 listEl.addEventListener('click',e=>{
@@ -968,6 +981,11 @@ document.getElementById('themeBtn').addEventListener('click',()=>{
 });
 function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});}
 
+/* ---------- Reiter auf schmalen Bildschirmen (Katalog zuerst) ---------- */
+window.BP_TABS=scPanels(document.getElementById('bpTabs'),[
+  {key:'kat',label:'<span class="de">Katalog</span><span class="en">Catalog</span>',els:[document.getElementById('cardCat')]},
+  {key:'list',label:'<span class="de">Beschaffung</span><span class="en">Procurement</span>',els:[document.getElementById('cardList')]},
+  {key:'res',label:'<span class="de">Bestand</span><span class="en">Stock</span>',els:[document.getElementById('cardRes')]}],'kat');
 /* ---------- init ---------- */
 (function init(){
   const th=load(LS.theme); if(th)root.setAttribute('data-theme',th);

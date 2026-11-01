@@ -16,7 +16,7 @@ import html
 import json
 from pathlib import Path
 
-KIT_VERSION = "1"
+KIT_VERSION = "2"
 
 # (Schlüssel, Name DE, Name EN, Online-URL, Symbol) – Reihenfolge = Navigationsreihenfolge
 TOOLS = [
@@ -79,7 +79,9 @@ def header_html(tool: str, eyebrow: tuple[str, str], title: tuple[str, str], led
     {actions}
     {refresh}
   </div>
+  <details class="fh-navd" open><summary>{bi("Weitere Tools", "More tools")}</summary>
   <nav class="fh-nav" aria-label="Weitere Tools"><span class="fh-navlbl">{bi("Weitere Tools", "More tools")}</span>{nav}</nav>
+  </details>
   <p class="fh-data">{data}</p>
 </header>"""
 
@@ -115,7 +117,7 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 CSS = r"""
 /* ===== Gemeinsame Kopfzeile (kopfzeile.py, in allen vier Tools identisch) ===== */
 .fh,.fh-modal{--fh-ink:#e8edf4;--fh-muted:#8b97a8;--fh-line:#243040;--fh-panel:#121822;--fh-panel2:#0e131c;--fh-accent:#3fd0dd;--fh-accent2:#f0a94a;--fh-on:#0a0e14;--fh-disp:'Exo 2',system-ui,sans-serif;--fh-body:'Rajdhani',system-ui,sans-serif}
-[data-theme="light"] .fh,[data-theme="light"] .fh-modal{--fh-ink:#141922;--fh-muted:#5a6472;--fh-line:#d5dbe3;--fh-panel:#ffffff;--fh-panel2:#eef1f5;--fh-accent:#0e7c86;--fh-accent2:#a8661a;--fh-on:#ffffff}
+[data-theme="light"] .fh,[data-theme="light"] .fh-modal{--fh-ink:#141922;--fh-muted:#5a6472;--fh-line:#d5dbe3;--fh-panel:#ffffff;--fh-panel2:#eef1f5;--fh-accent:#0e7c86;--fh-accent2:#96591a;--fh-on:#ffffff}
 .fh-en{display:none}
 html[lang="en"] .fh-en,html[data-lang="en"] .fh-en{display:inline}
 html[lang="en"] .fh-de,html[data-lang="en"] .fh-de{display:none}
