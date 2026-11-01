@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.4.0] – 2026-11-01
+
+### Hinzugefügt
+- **Schalter „nur ausgewählte“** in der Filterleiste: beschränkt den Katalog auf die gewählten Baupläne, mit Anzahl im Schalter. Die übrigen Filter (Suche, Kategorie, Größe …) gelten weiter; blenden sie gewählte Baupläne aus, sagt der Katalog das und bietet „Filter zurücksetzen“ an. Ohne Auswahl ist der Schalter gesperrt; wird die letzte Auswahl entfernt, schaltet er sich aus. Der Zustand bleibt im Browser gespeichert.
+
 ## [1.3.1] – 2026-10-25
 
 ### Hinzugefügt

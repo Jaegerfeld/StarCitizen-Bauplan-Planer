@@ -319,6 +319,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   a.btn{text-decoration:none;display:inline-flex;align-items:center}
   .btn.swap{border-color:var(--accent2);color:var(--accent2)}
   .btn.swap:hover{background:var(--accent2);color:var(--bg)}
+  .btn.onlysel{min-height:36px}
+  .btn.onlysel[aria-pressed="true"]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+  .btn.onlysel[aria-pressed="true"]:hover{filter:brightness(1.08);color:var(--bg)}
+  .btn.onlysel:disabled{opacity:.45;cursor:not-allowed}
   .addbox{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
   .addbox input{width:56px;text-align:center}
   .addbtn{font-family:var(--disp);font-weight:700;font-size:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 14px;cursor:pointer;margin-left:auto}
@@ -403,6 +407,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <option value="name" data-i18n="sortName">Name A–Z</option>
           <option value="mats" data-i18n="sortMats">wenigste Materialien</option>
         </select>
+        <button class="btn onlysel" id="onlySel" type="button" aria-pressed="false"><span id="onlySelBox">☐</span> <span data-i18n="onlySel">nur ausgewählte</span> <span id="onlySelN"></span></button>
         <span class="fx"><span id="catCount"></span></span>
       </div>
       <div class="selbar" id="selBar"></div>
@@ -436,7 +441,9 @@ const I18N={
     orphan:'nicht im Katalog',orphanWarn:n=>`⚠ ${n} gewählte(r) Bauplan/Baupläne nicht im Katalog – nicht in der Summe enthalten.`,
     scdlOk:(n,u)=>`${n} erworbene erkannt${u?`, ${u} nicht im Katalog`:''}.`,scdlErr:'Datei nicht lesbar (sc_bp_erledigt.json erwartet).',
     refOk:'Neuester Stand geladen.',refErr:'GitHub nicht erreichbar – bestehende Daten bleiben.',refSame:'Du hast bereits den neuesten Stand.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
-    results:'Treffer',more:n=>`… ${n} weitere anzeigen`},
+    results:'Treffer',more:n=>`… ${n} weitere anzeigen`,
+    onlySel:'nur ausgewählte',onlySelTip:'Katalog auf die gewählten Baupläne beschränken (andere Filter gelten weiter)',
+    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen'},
   en:{ownAll:'all',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
     src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
     selEmpty:'No blueprints selected yet – click “+” in the catalog.',matEmpty:'Select blueprints to see the material needs.',
@@ -444,9 +451,11 @@ const I18N={
     orphan:'not in catalog',orphanWarn:n=>`⚠ ${n} selected blueprint(s) not in catalog – excluded from totals.`,
     scdlOk:(n,u)=>`${n} owned detected${u?`, ${u} not in catalog`:''}.`,scdlErr:'File not readable (expected sc_bp_erledigt.json).',
     refOk:'Latest build loaded.',refErr:'GitHub unreachable – keeping current data.',refSame:'You already have the latest build.',stateOk:'State loaded.',stateErr:'State not readable.',
-    results:'results',more:n=>`… show ${n} more`}
+    results:'results',more:n=>`… show ${n} more`,
+    onlySel:'selected only',onlySelTip:'Limit the catalog to your selected blueprints (other filters still apply)',
+    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters'}
 };
-const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta'};
+const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta',onlySel:'scbp_onlysel'};
 const root=document.documentElement;
 let LANG=(load(LS.lang)==='en')?'en':'de';
 function t(k){return I18N[LANG][k];}
@@ -509,11 +518,25 @@ function buildSubFilter(){
   else{subs=[...new Set(Object.values(SUBS).flat())].sort((a,b)=>a.localeCompare(b));}
   fSub.innerHTML='<option value="">'+t('allSub')+'</option>'+subs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
 }
+const onlySelBtn=document.getElementById('onlySel');
+let ONLY_SEL=load(LS.onlySel)===true;
+function selCount(){return Object.keys(SEL).filter(n=>BP.some(x=>x.name===n)).length;}
+function syncOnlySel(){
+  const n=selCount();
+  if(!n&&ONLY_SEL){ONLY_SEL=false;save(LS.onlySel,false);}   // ohne Auswahl kein leerer Katalog
+  onlySelBtn.setAttribute('aria-pressed',ONLY_SEL?'true':'false');
+  document.getElementById('onlySelBox').textContent=ONLY_SEL?'☑':'☐';   // zweites Signal neben der Farbe
+  onlySelBtn.disabled=!n;
+  onlySelBtn.title=t('onlySelTip');
+  document.getElementById('onlySelN').textContent=n?'('+n+')':'';
+}
+function resetFilters(){qEl.value='';fClass.value='';buildSubFilter();[fSub,fSize,fGrade,fKls].forEach(el=>el.value='');fOwned.value='all';renderCap=150;renderList();}
 function filtered(){
   const q=qEl.value.trim().toLowerCase(), cl=fClass.value, su=fSub.value, ow=fOwned.value,
         sz=fSize.value, gr=fGrade.value, kl=fKls.value,
         hasOwn=OWNMETA!==null||Object.keys(OWNED).length>0;
   let arr=BP.filter(b=>{
+    if(ONLY_SEL && !SEL[b.name]) return false;
     if(q && !b._s.includes(q)) return false;
     if(cl && b.cls!==cl) return false;
     if(su && b.sub!==su) return false;
@@ -541,6 +564,7 @@ function srcLine(b){
   return `<div class="srcline">▸ ${t('src')}: ${parts.join(' · ')}${b.src.length>3?` +${b.src.length-3}`:''}</div>`;
 }
 function renderList(){
+  syncOnlySel();
   const arr=filtered();
   document.getElementById('catCount').textContent=arr.length+' '+t('results');
   const slice=arr.slice(0,renderCap);
@@ -553,6 +577,9 @@ function renderList(){
       <div class="addbox"><input type="number" min="1" value="1" aria-label="qty"><button class="addbtn" type="button">+</button></div>
     </div>`).join('');
   if(arr.length>renderCap) html+=`<button class="btn morebtn" id="moreBtn" type="button">${t('more')(arr.length-renderCap)}</button>`;
+  // Bei "nur ausgewählte": sagen, wenn die übrigen Filter gewählte Baupläne verstecken
+  const hidden=ONLY_SEL?selCount()-arr.length:0;
+  if(hidden>0) html=`<div class="empty" style="grid-column:1/-1">${t('onlySelHidden')(hidden)} <button class="btn" id="resetF" type="button">${t('resetFilters')}</button></div>`+html;
   listEl.innerHTML=html||`<div class="empty">—</div>`;
 }
 
@@ -667,6 +694,8 @@ let qt=null;
 qEl.addEventListener('input',()=>{clearTimeout(qt);qt=setTimeout(()=>{renderCap=150;renderList();},130);});
 fClass.addEventListener('change',()=>{buildSubFilter();renderCap=150;renderList();});
 [fSub,fSize,fGrade,fKls,fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
+onlySelBtn.addEventListener('click',()=>{ONLY_SEL=!ONLY_SEL;save(LS.onlySel,ONLY_SEL);renderCap=150;renderList();});
+listEl.addEventListener('click',e=>{if(e.target.closest('#resetF'))resetFilters();});
 listEl.addEventListener('click',e=>{
   if(e.target.id==='moreBtn'){renderCap+=200;renderList();return;}
   const add=e.target.closest('.addbtn'); if(add){const row=add.closest('.bp');addSel(row.dataset.nm,parseInt(row.querySelector('input').value,10)||1);}
