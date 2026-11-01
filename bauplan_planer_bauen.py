@@ -407,7 +407,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <option value="name" data-i18n="sortName">Name A–Z</option>
           <option value="mats" data-i18n="sortMats">wenigste Materialien</option>
         </select>
-        <button class="btn onlysel" id="onlySel" type="button" aria-pressed="false">☑ <span data-i18n="onlySel">nur ausgewählte</span> <span id="onlySelN"></span></button>
+        <button class="btn onlysel" id="onlySel" type="button" aria-pressed="false"><span id="onlySelBox">☐</span> <span data-i18n="onlySel">nur ausgewählte</span> <span id="onlySelN"></span></button>
         <span class="fx"><span id="catCount"></span></span>
       </div>
       <div class="selbar" id="selBar"></div>
@@ -525,6 +525,7 @@ function syncOnlySel(){
   const n=selCount();
   if(!n&&ONLY_SEL){ONLY_SEL=false;save(LS.onlySel,false);}   // ohne Auswahl kein leerer Katalog
   onlySelBtn.setAttribute('aria-pressed',ONLY_SEL?'true':'false');
+  document.getElementById('onlySelBox').textContent=ONLY_SEL?'☑':'☐';   // zweites Signal neben der Farbe
   onlySelBtn.disabled=!n;
   onlySelBtn.title=t('onlySelTip');
   document.getElementById('onlySelN').textContent=n?'('+n+')':'';
