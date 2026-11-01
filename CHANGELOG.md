@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.6.0] – 2026-11-01
+
+### Geändert
+- **Mehrfachauswahl in den Filtern** Kategorie, Unterkategorie, Größe, Grade und Klasse: Jedes Feld klappt eine Häkchen-Liste auf, z. B. „Rüstung + Helme“ oder „S1–S3“. Ohne Haken gilt „alle“. Das Feld nennt die Auswahl („Rüstung, Helme“, ab drei Einträgen „S1 +2“) und bekommt einen farbigen Rand. Unterkategorien sind nach Kategorie gruppiert und folgen der Kategorieauswahl; wird eine Kategorie abgewählt, fallen ihre Unterkategorien aus der Auswahl. „Auswahl löschen“ oben in jeder Liste, Schließen per Klick daneben oder Esc.
+- „alle / nur erworben“ und die Sortierung bleiben Einfachauswahl.
+
 ## [1.5.0] – 2026-11-01
 
 ### Hinzugefügt

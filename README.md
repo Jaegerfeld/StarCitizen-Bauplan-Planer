@@ -9,7 +9,7 @@ A single-file, offline HTML tool that lists **every craftable Star Citizen bluep
 
 - **Full catalog** of all craftable blueprints from [star-head.de](https://star-head.de) (~1585), each with its recipe (material × quantity, minimum quality) and the contract that drops it.
 - **Wikelo-style layout:** enter the resources you already have on the **left**, pick blueprints on the **right**.
-- **Two-level category filter:** class (Armor, Helmets, FPS weapons, Ship weapons, Ship components, Tools …) → dependent subclass (Light/Heavy Armor, Pistol, Rifle …). *(Category labels are in German even in EN mode; blueprint and material names come from star-head in English.)*
+- **Two-level category filter with multi-select:** class (Armor, Helmets, FPS weapons, Ship weapons, Ship components, Tools …) → dependent subclass (Light/Heavy Armor, Pistol, Rifle …); size, grade and class too – tick several values each. *(Category labels are in German even in EN mode; blueprint and material names come from star-head in English.)*
 - **Owned filter:** show only owned / not-owned blueprints after importing your own list.
 - **Selected only:** a toggle in the filter bar shows just your selected blueprints; the other filters still apply.
 - **Tile images:** thumbnails from the [Star Citizen Wiki](https://starcitizen.tools/) (linked, © CIG); own captures in `bilder/` take precedence – format in [`bilder/LIESMICH.md`](bilder/LIESMICH.md) (German). Offline, tiles show no image.

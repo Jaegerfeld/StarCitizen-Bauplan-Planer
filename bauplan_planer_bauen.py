@@ -417,6 +417,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   input[type=number]{font-family:var(--body);font-size:14px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%}
   input[type=search],select{font-family:var(--body);font-size:15px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
   select{cursor:pointer}
+  /* Mehrfachauswahl-Filter: sieht aus wie ein select, klappt eine Häkchen-Liste auf */
+  .ms{position:relative}
+  .ms>summary{list-style:none;font-family:var(--body);font-size:15px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;min-height:40px;cursor:pointer;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:relative;box-sizing:border-box}
+  .ms>summary::-webkit-details-marker{display:none}
+  .ms>summary::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .ms[open]>summary::after{content:'▴'}
+  .ms>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .ms.has>summary{border-color:var(--accent);color:var(--accent);font-weight:600}
+  .mspanel{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:240px;max-height:360px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px}
+  .mspanel label{display:flex;gap:8px;align-items:center;min-height:34px;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:14.5px;white-space:nowrap}
+  .mspanel label:hover{background:var(--panel2)}
+  .mspanel input{width:16px;height:16px;margin:0;accent-color:var(--accent);flex:0 0 auto}
+  .mspanel .grp{font-family:var(--disp);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 8px 2px}
+  .mspanel .msclear{width:100%;margin:0 0 4px;min-height:34px}
+  .mspanel .msclear:disabled{opacity:.45;cursor:default}
 
   table.mat{width:100%;border-collapse:collapse;font-size:14px}
   table.mat th,table.mat td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
@@ -540,11 +555,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="card">
       <div class="filters">
         <input type="search" id="q" placeholder="Suchen … (Name / Material)" autocomplete="off">
-        <select id="fClass"></select>
-        <select id="fSub"></select>
-        <select id="fSize" title="Größe"></select>
-        <select id="fGrade" title="Grade"></select>
-        <select id="fKls" title="Klasse (Civilian/Military/…)"></select>
+        <details class="ms" id="fClass"></details>
+        <details class="ms" id="fSub"></details>
+        <details class="ms" id="fSize"></details>
+        <details class="ms" id="fGrade"></details>
+        <details class="ms" id="fKls"></details>
         <select id="fOwned" disabled>
           <option value="all" data-i18n="ownAll">alle</option>
           <option value="yes" data-i18n="ownYes">nur erworben</option>
@@ -591,7 +606,7 @@ const I18N={
     refOk:'Neuester Stand geladen.',refErr:'GitHub nicht erreichbar – bestehende Daten bleiben.',refSame:'Du hast bereits den neuesten Stand.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
     results:'Treffer',more:n=>`… ${n} weitere anzeigen`,
     onlySel:'nur ausgewählte',onlySelTip:'Katalog auf die gewählten Baupläne beschränken (andere Filter gelten weiter)',
-    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen',
+    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen',msClear:'Auswahl löschen (alle)',
     imgWiki:'Bild: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Bild: eigene Aufnahme · © CIG'},
   en:{ownAll:'all',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
     src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
@@ -602,7 +617,7 @@ const I18N={
     refOk:'Latest build loaded.',refErr:'GitHub unreachable – keeping current data.',refSame:'You already have the latest build.',stateOk:'State loaded.',stateErr:'State not readable.',
     results:'results',more:n=>`… show ${n} more`,
     onlySel:'selected only',onlySelTip:'Limit the catalog to your selected blueprints (other filters still apply)',
-    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters',
+    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters',msClear:'Clear selection (all)',
     imgWiki:'Image: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Image: own capture · © CIG'}
 };
 const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta',onlySel:'scbp_onlysel'};
@@ -651,22 +666,62 @@ const qEl=document.getElementById('q'), fClass=document.getElementById('fClass')
       fSort=document.getElementById('fSort'), listEl=document.getElementById('list'),
       fSize=document.getElementById('fSize'), fGrade=document.getElementById('fGrade'), fKls=document.getElementById('fKls');
 
+/* ---------- Mehrfachauswahl (details/summary + Häkchen) ----------
+   Leere Auswahl = alle. Werte als Set in MS[id].sel; Änderungen lösen 'mschange' am Element aus. */
+const MS={};
+function msInit(el,allKey){
+  MS[el.id]={el,sel:new Set(),items:[],allKey};
+  el.innerHTML='<summary></summary><div class="mspanel" role="group"></div>';
+  el.addEventListener('change',e=>{
+    const i=e.target; if(!i.matches('input[type=checkbox]')) return;
+    const m=MS[el.id]; if(i.checked) m.sel.add(i.value); else m.sel.delete(i.value);
+    msLabel(el.id); el.querySelector('.msclear').disabled=!m.sel.size;
+    el.dispatchEvent(new Event('mschange'));
+  });
+  el.addEventListener('click',e=>{
+    if(!e.target.closest('.msclear')) return;
+    MS[el.id].sel.clear(); msRender(el.id); el.dispatchEvent(new Event('mschange'));
+  });
+  el.addEventListener('toggle',()=>{if(el.open) Object.values(MS).forEach(m=>{if(m.el!==el) m.el.open=false;});});
+}
+function msSet(id,items){   // items: [{v,label,grp?}]; nicht mehr vorhandene Werte fallen aus der Auswahl
+  const m=MS[id]; m.items=items; const ok=new Set(items.map(x=>x.v));
+  [...m.sel].forEach(v=>{if(!ok.has(v)) m.sel.delete(v);}); msRender(id);
+}
+function msRender(id){
+  const m=MS[id]; let grp=null, html=`<button class="btn msclear" type="button"${m.sel.size?'':' disabled'}>${t('msClear')}</button>`;
+  const grouped=new Set(m.items.map(x=>x.grp||'')).size>1;
+  for(const x of m.items){
+    if(grouped && x.grp!==grp){grp=x.grp; html+=`<div class="grp">${esc(grp)}</div>`;}
+    html+=`<label><input type="checkbox" value="${esc(x.v)}"${m.sel.has(x.v)?' checked':''}>${esc(x.label)}</label>`;
+  }
+  m.el.querySelector('.mspanel').innerHTML=html; msLabel(id);
+}
+function msLabel(id){
+  const m=MS[id], n=m.sel.size, lab=v=>(m.items.find(x=>x.v===v)||{label:v}).label;
+  const vals=m.items.filter(x=>m.sel.has(x.v)).map(x=>x.v);
+  const txt=!n?t(m.allKey):n<=2?vals.map(lab).join(', '):lab(vals[0])+' +'+(n-1);
+  const s=m.el.querySelector('summary'); s.textContent=txt; s.title=n?vals.map(lab).join(', '):t(m.allKey);
+  m.el.classList.toggle('has',n>0);
+}
+document.addEventListener('click',e=>{Object.values(MS).forEach(m=>{if(m.el.open&&!m.el.contains(e.target)) m.el.open=false;});});
+document.addEventListener('keydown',e=>{if(e.key==='Escape') Object.values(MS).forEach(m=>{if(m.el.open){m.el.open=false;m.el.querySelector('summary').focus();}});});
+[[fClass,'allClass'],[fSub,'allSub'],[fSize,'allSize'],[fGrade,'allGrade'],[fKls,'allKls']].forEach(([el,k])=>msInit(el,k));
+
 function buildClassFilter(){
-  fClass.innerHTML='<option value="">'+t('allClass')+'</option>'+CLASS_ORDER.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  msSet('fClass',CLASS_ORDER.map(c=>({v:c,label:c})));
   buildSubFilter();
   buildSpecFilters();
 }
 function buildSpecFilters(){
-  fSize.innerHTML='<option value="">'+t('allSize')+'</option>'+SIZES.map(s=>`<option value="${esc(s)}">S${esc(s)}</option>`).join('');
-  fGrade.innerHTML='<option value="">'+t('allGrade')+'</option>'+GRADES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
-  fKls.innerHTML='<option value="">'+t('allKls')+'</option>'+KLS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  msSet('fSize',SIZES.map(s=>({v:s,label:'S'+s})));
+  msSet('fGrade',GRADES.map(s=>({v:s,label:s})));
+  msSet('fKls',KLS.map(s=>({v:s,label:s})));
 }
-function buildSubFilter(){
-  const c=fClass.value;
-  let subs=[];
-  if(c){subs=SUBS[c]||[];}
-  else{subs=[...new Set(Object.values(SUBS).flat())].sort((a,b)=>a.localeCompare(b));}
-  fSub.innerHTML='<option value="">'+t('allSub')+'</option>'+subs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+function buildSubFilter(){   // Unterkategorien der gewählten Kategorien (ohne Wahl: alle), nach Kategorie gruppiert
+  const cl=MS.fClass.sel;
+  const items=CLASS_ORDER.filter(c=>!cl.size||cl.has(c)).flatMap(c=>(SUBS[c]||[]).map(s=>({v:c+'|'+s,label:s,grp:c})));
+  msSet('fSub',items);
 }
 const onlySelBtn=document.getElementById('onlySel');
 let ONLY_SEL=load(LS.onlySel)===true;
@@ -680,19 +735,19 @@ function syncOnlySel(){
   onlySelBtn.title=t('onlySelTip');
   document.getElementById('onlySelN').textContent=n?'('+n+')':'';
 }
-function resetFilters(){qEl.value='';fClass.value='';buildSubFilter();[fSub,fSize,fGrade,fKls].forEach(el=>el.value='');fOwned.value='all';renderCap=150;renderList();}
+function resetFilters(){qEl.value='';Object.keys(MS).forEach(id=>MS[id].sel.clear());buildSubFilter();Object.keys(MS).forEach(msRender);fOwned.value='all';renderCap=150;renderList();}
 function filtered(){
-  const q=qEl.value.trim().toLowerCase(), cl=fClass.value, su=fSub.value, ow=fOwned.value,
-        sz=fSize.value, gr=fGrade.value, kl=fKls.value,
+  const q=qEl.value.trim().toLowerCase(), ow=fOwned.value,
+        cl=MS.fClass.sel, su=MS.fSub.sel, sz=MS.fSize.sel, gr=MS.fGrade.sel, kl=MS.fKls.sel,
         hasOwn=OWNMETA!==null||Object.keys(OWNED).length>0;
   let arr=BP.filter(b=>{
     if(ONLY_SEL && !SEL[b.name]) return false;
     if(q && !b._s.includes(q)) return false;
-    if(cl && b.cls!==cl) return false;
-    if(su && b.sub!==su) return false;
-    if(sz && b.sz!==sz) return false;
-    if(gr && b.gr!==gr) return false;
-    if(kl && b.kl!==kl) return false;
+    if(cl.size && !cl.has(b.cls)) return false;
+    if(su.size && !su.has(b.cls+'|'+b.sub)) return false;
+    if(sz.size && !sz.has(b.sz)) return false;
+    if(gr.size && !gr.has(b.gr)) return false;
+    if(kl.size && !kl.has(b.kl)) return false;
     if(hasOwn && ow==='yes' && !OWNED[b.name]) return false;
     if(hasOwn && ow==='no' && OWNED[b.name]) return false;
     return true;
@@ -855,8 +910,9 @@ async function refresh(){
 /* ---------- events ---------- */
 let qt=null;
 qEl.addEventListener('input',()=>{clearTimeout(qt);qt=setTimeout(()=>{renderCap=150;renderList();},130);});
-fClass.addEventListener('change',()=>{buildSubFilter();renderCap=150;renderList();});
-[fSub,fSize,fGrade,fKls,fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
+fClass.addEventListener('mschange',()=>{buildSubFilter();renderCap=150;renderList();});
+[fSub,fSize,fGrade,fKls].forEach(el=>el.addEventListener('mschange',()=>{renderCap=150;renderList();}));
+[fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
 onlySelBtn.addEventListener('click',()=>{ONLY_SEL=!ONLY_SEL;save(LS.onlySel,ONLY_SEL);renderCap=150;renderList();});
 listEl.addEventListener('click',e=>{if(e.target.closest('#resetF'))resetFilters();});
 listEl.addEventListener('click',e=>{
