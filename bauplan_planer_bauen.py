@@ -1,18 +1,45 @@
 #!/usr/bin/env python3
-"""SC Bauplan-Planer — Generator.
-
-Zieht alle craftbaren Baupläne von star-head.de, ordnet sie über die
-Item-Typ-Tabelle des SC-Deutsch-Launchers einer zweistufigen Kategorie
-(Klasse → Unterklasse) zu und backt alles als JSON in eine einzige,
-offline lauffähige HTML-Datei (SC_Bauplan_Planer.html).
-
-Datenquellen:
-  - Baupläne + Rezepte:  https://api.star-head.de/blueprint
-  - Item-Typen (lokal):  %APPDATA%/sc-deutsch-launcher/blueprints/bp_item_types_v3.json
-
-Aufruf (überall lauffähig, Pfade relativ zum Skript):
-    python bauplan_planer_bauen.py
-"""
+# =============================================================================
+# Autor:          Robert Seebauer
+# Repository:     https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer
+# KI-Unterstützung: Erstellt mit Unterstützung von Claude (Anthropic)
+# Erstellt:       27.09.2026
+# Geändert:       01.11.2026
+# Lizenz:         BSD-3-Clause (siehe LICENSE)
+#
+# Fachliche Funktion:
+#   Generator des SC Bauplan-Planers. Lädt alle craftbaren Baupläne samt Rezepten
+#   (Material, Menge, Mindestqualität) und Beschaffungsquellen (Kontrakte mit
+#   Drop-Chance) von der star-head.de-API (https://api.star-head.de/blueprint) und
+#   reduziert sie auf ein schlankes App-Schema. Kontraktnamen mit Platzhaltern oder
+#   rohen Übersetzungs-Keys werden lesbar gemacht; Größe, Grad und Klasse kommen aus
+#   der Item-Beschreibung.
+#
+#   Die Einordnung in eine zweistufige Kategorie (Klasse -> Unterklasse) läuft über
+#   die Item-Typ-Tabelle des SC-Deutsch-Launchers (bp_item_types_v3.json, zuerst aus
+#   %APPDATA%/sc-deutsch-launcher/blueprints/, sonst die Kopie im Repo) und die
+#   Taxonomie TAXO; unbekannte Typen landen unter „Sonstiges“.
+#
+#   Kachel-Bilder: eigene Aufnahmen in bilder/<gameId>.webp|png|jpg haben Vorrang,
+#   sonst Vorschaubilder aus der Star-Citizen-Wiki-API (starcitizen.tools vor
+#   star-citizen.wiki), die nur verlinkt und nie ins Repo kopiert werden. Der
+#   Bild-Cache führt die lokale und die veröffentlichte data.json zusammen (der
+#   jüngere Eintrag gewinnt); ohne Bild wird nach 7 Tagen erneut gefragt, mit Bild
+#   nach 30 Tagen aufgefrischt, höchstens 150 Auffrischungen je Lauf (schont die
+#   Wiki-API).
+#
+#   Ergebnisse: SC_Bauplan_Planer.html (eine offline lauffähige Seite mit
+#   eingebackenen Daten, gameId weggelassen, Wiki-Thumbs gekürzt), data.json
+#   (derselbe Stand plus Bild-Cache; der tägliche GitHub-Build veröffentlicht sie auf
+#   GitHub Pages, der Knopf „Neuesten Stand laden“ in der App holt sie von dort statt
+#   direkt von star-head) und bilder_fehlend.csv (Arbeitsliste der Baupläne ohne
+#   Bild). Kopfzeile, „Was ist neu?“-Dialog und Design kommen aus kopfzeile.py und
+#   sc_design.py, der Changelog aus CHANGELOG.md.
+#
+#   Aufruf (überall lauffähig, Pfade relativ zum Skript):
+#       python bauplan_planer_bauen.py
+# =============================================================================
+"""Build script for the SC Blueprint Planner: fetches data and writes the offline page."""
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -28,33 +55,47 @@ import kopfzeile as kz
 import sc_design as sd
 from version import VERSION
 
+#: star-head.de endpoint that returns all blueprints with recipes and reward sources.
 BLUEPRINT_URL = "https://api.star-head.de/blueprint"
+#: Folder of this script; all inputs and outputs are resolved relative to it.
 HERE = Path(__file__).parent
+#: The generated offline page.
 OUT_HTML = HERE / "SC_Bauplan_Planer.html"
+#: The same data set as a separate file (plus image cache) for the in-app refresh.
 OUT_JSON = HERE / "data.json"
-# Veröffentlichter Datenstand (täglicher GitHub-Build); Quelle für den Knopf in der App.
+#: Published data set (daily GitHub build); source for the refresh button in the app.
 DATA_URL = "https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/data.json"
 
-# Kachel-Bilder: eigene Aufnahmen haben Vorrang, sonst Vorschaubild aus dem Star Citizen Wiki.
-# Die Bilder werden nur verlinkt (Hotlink), nicht ins Repo kopiert.
-OWN_DIR = HERE / "bilder"                       # eigene Bilder: bilder/<gameId>.webp|png|jpg
+# Tile images: own captures take priority, otherwise a thumbnail from the Star Citizen Wiki.
+# The images are only linked (hotlinked), never copied into the repo.
+#: Own images: bilder/<gameId>.webp|png|jpg.
+OWN_DIR = HERE / "bilder"
+#: Star Citizen Wiki API v2 item endpoint (append the gameId).
 WIKI_ITEM_URL = "https://api.star-citizen.wiki/api/v2/items/"
-WIKI_SOURCES = {"starcitizen.tools": "w", "star-citizen.wiki": "c"}   # nur Wiki-Quellen
+#: Accepted image sources in order of preference, mapped to their short code on the page.
+WIKI_SOURCES = {"starcitizen.tools": "w", "star-citizen.wiki": "c"}
+#: Width of the thumbnails in pixels.
 THUMB_PX = 160
-IMG_MISS_DAYS = 7          # ohne Bild: nach einer Woche erneut im Wiki nachsehen
-IMG_HIT_DAYS = 30          # mit Bild: nach 30 Tagen auffrischen ...
-IMG_REFRESH_MAX = 150      # ... aber höchstens so viele pro Lauf (schont die Wiki-API)
+#: Days after which an item without a wiki image is looked up again.
+IMG_MISS_DAYS = 7
+#: Days after which a found wiki image is refreshed ...
+IMG_HIT_DAYS = 30
+#: ... but at most this many refreshes per run (spares the wiki API).
+IMG_REFRESH_MAX = 150
+#: Size segment of a MediaWiki thumbnail path (e.g. "/320px-").
 _THUMB_RE = re.compile(r"/(\d+)px-")
+#: Original file URL on starcitizen.tools: host, hash dirs a and ab, file name.
 _MEDIA_RE = re.compile(r"^(https://media\.starcitizen\.tools)/([0-9a-f])/([0-9a-f]{2})/([^/?]+)")
 
 _appdata = os.environ.get("APPDATA", "")
+#: Where to look for the SCDL item-type table: launcher folder first, then the repo copy.
 ITMAP_CANDIDATES = [
     Path(_appdata) / "sc-deutsch-launcher" / "blueprints" / "bp_item_types_v3.json"
     if _appdata else None,
     HERE / "bp_item_types_v3.json",
 ]
 
-# Zweistufige Taxonomie: feiner star-head/SCDL-Typ -> (Klasse, Unterklasse).
+#: Two-level taxonomy: fine star-head/SCDL item type -> (class, subclass), German labels.
 TAXO = {
     "Light Armor": ("Rüstung", "Leichte Rüstung"),
     "Medium Armor": ("Rüstung", "Mittlere Rüstung"),
@@ -101,26 +142,54 @@ TAXO = {
     "Tractor Beam": ("Werkzeuge", "Traktorstrahl"),
     "Fuel Nozzle": ("Werkzeuge", "Tankdüse"),
 }
-# Reihenfolge der Klassen im Filter.
+#: Order of the classes in the category filter.
 CLASS_ORDER = [
     "Rüstung", "Helme", "Kleidung", "FPS-Waffen", "Magazine",
     "Schiffswaffen", "Schiffskomponenten", "Werkzeuge", "Sonstiges",
 ]
 
+#: Game placeholder in contract names, e.g. "~mission(Location)".
 _PLACEHOLDER = re.compile(r"~\w+\([^)]*\)")
+#: Untranslated localisation key (lower case, digits and underscores only).
 _RAWKEY = re.compile(r"^[a-z0-9_]+$")
+#: Raw key of the Black Box Recovery contracts; the group is the faction/variant.
 _BLACKBOX = re.compile(r"blackbox_recover_title_([a-z]+)_")
 
 
 def get_json(url: str, timeout: int = 60):
-    """JSON von einer URL laden (mit UA-Header, sonst blockt star-head teils)."""
+    """
+    Fetch and decode JSON from a URL.
+
+    Sends a browser User-Agent header, because star-head sometimes blocks requests
+    without one.
+
+    Args:
+        url:     Address to fetch.
+        timeout: Socket timeout in seconds.
+
+    Returns:
+        The decoded JSON value.
+
+    Raises:
+        urllib.error.URLError: On network or HTTP errors.
+        json.JSONDecodeError: If the response is not valid JSON.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (feste URL)
+    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed URL)
         return json.loads(r.read().decode("utf-8"))
 
 
 def load_itmap() -> dict[str, str]:
-    """Item-Typ-Tabelle laden (Name→Typ), lowercased. Leer, falls nicht gefunden."""
+    """
+    Load the SCDL item-type table (item name -> fine item type).
+
+    Tries the candidates in ITMAP_CANDIDATES in order; an unreadable file is
+    reported and skipped.
+
+    Returns:
+        Mapping of lower-cased item names to their type, or an empty dict if no
+        table was found (all blueprints then fall into class "Sonstiges").
+    """
     for cand in ITMAP_CANDIDATES:
         if cand and cand.exists():
             try:
@@ -134,8 +203,19 @@ def load_itmap() -> dict[str, str]:
 
 
 def clean_source(name: str) -> str:
-    """Kontraktnamen säubern: ~mission()-Platzhalter → 'Ort', rohe
-    Übersetzungs-Keys (nur Kleinbuchstaben/Unterstriche) lesbar machen."""
+    """
+    Make a contract name from star-head readable.
+
+    Game placeholders such as ``~mission(...)`` become "(Ort)"; raw localisation
+    keys (lower case and underscores only) are turned into title case, with the
+    Black Box Recovery keys mapped to "Black Box Recovery (XYZ)".
+
+    Args:
+        name: Contract name as delivered by the API.
+
+    Returns:
+        The cleaned display name.
+    """
     name = _PLACEHOLDER.sub("(Ort)", name).strip()
     if _RAWKEY.fullmatch(name):
         m = _BLACKBOX.match(name)
@@ -146,15 +226,32 @@ def clean_source(name: str) -> str:
 
 
 def categorize(fine_type: str) -> tuple[str, str]:
-    """Feinen Item-Typ auf (Klasse, Unterklasse) abbilden."""
+    """
+    Map a fine item type to its (class, subclass) pair via TAXO.
+
+    Args:
+        fine_type: Item type from the SCDL table.
+
+    Returns:
+        (class, subclass); unknown types become ("Sonstiges", fine_type).
+    """
     return TAXO.get(fine_type, ("Sonstiges", fine_type or "Sonstiges"))
 
 
 def spec_fields(desc: str) -> dict:
-    """Size/Grade/Class aus der Item-Beschreibung ziehen (z. B. 'S1 · A · Civilian').
+    """
+    Extract size, grade and class from an item description (e.g. 'S1 · A · Civilian').
 
-    star-head liefert die Beschreibung mit literalen '\\n' und teils NBSP; beides
-    normalisieren, dann die drei Zeilen greifen. Nur belegte Felder zurückgeben."""
+    star-head delivers the description with literal '\\n' sequences and partly with
+    non-breaking spaces; both are normalised before the three lines are read.
+
+    Args:
+        desc: Item description text.
+
+    Returns:
+        Dict with the keys ``sz`` (size without the leading "S"), ``gr`` and
+        ``kl``; only fields that are present are included.
+    """
     text = (desc or "").replace("\\n", "\n").replace("\xa0", " ")
     out = {}
     for key, short in (("Size", "sz"), ("Grade", "gr"), ("Class", "kl")):
@@ -169,10 +266,19 @@ def spec_fields(desc: str) -> dict:
 
 
 def thumb_url(url: str) -> str:
-    """Wiki-Bild-URL auf ein kleines Vorschaubild (THUMB_PX breit) umstellen.
+    """
+    Turn a wiki image URL into a small thumbnail URL (THUMB_PX wide).
 
-    starcitizen.tools: vorhandenen Thumb-Pfad auf THUMB_PX setzen oder aus dem Original
-    einen MediaWiki-Thumb-Pfad bauen. Andere Quellen bleiben, wie sie sind."""
+    For starcitizen.tools an existing thumbnail path is resized to THUMB_PX, or a
+    MediaWiki thumbnail path is built from the original file URL. URLs from other
+    sources are returned unchanged.
+
+    Args:
+        url: Image URL from the wiki API.
+
+    Returns:
+        The thumbnail URL.
+    """
     if "/thumb/" in url and _THUMB_RE.search(url):
         return _THUMB_RE.sub(f"/{THUMB_PX}px-", url, count=1)
     m = _MEDIA_RE.match(url)
@@ -184,13 +290,22 @@ def thumb_url(url: str) -> str:
 
 
 def wiki_image(gid: str) -> tuple[str, str]:
-    """(Vorschau-URL, Quellenkürzel) aus der Wiki-API; ('', '') ohne Wiki-Bild."""
+    """
+    Look up the thumbnail of one item in the Star Citizen Wiki API.
+
+    Args:
+        gid: The item's gameId.
+
+    Returns:
+        (thumbnail URL, source code from WIKI_SOURCES), or ("", "") if the item
+        has no image from an accepted source or the lookup fails.
+    """
     try:
         d = get_json(WIKI_ITEM_URL + gid, timeout=30).get("data") or {}
-    except Exception:  # noqa: BLE001 (404 = Gegenstand fehlt im Wiki)
+    except Exception:  # noqa: BLE001 (404 = item missing from the wiki)
         return "", ""
     imgs = d.get("images") or []
-    for wanted in WIKI_SOURCES:               # starcitizen.tools zuerst
+    for wanted in WIKI_SOURCES:               # starcitizen.tools first
         for im in imgs:
             if im.get("source") == wanted and im.get("thumbnail_url"):
                 return thumb_url(im["thumbnail_url"]), WIKI_SOURCES[wanted]
@@ -198,9 +313,16 @@ def wiki_image(gid: str) -> tuple[str, str]:
 
 
 def load_img_cache() -> dict[str, list]:
-    """Bild-Cache {gameId: [url, quelle, datum]} aus der lokalen und der veröffentlichten
-    data.json zusammenführen (jeweils den jüngeren Eintrag). So fragt der tägliche Build
-    nur neue oder fällige Gegenstände im Wiki ab."""
+    """
+    Merge the image cache from the local and the published data.json.
+
+    For each gameId the younger entry wins. This way the daily build only asks
+    the wiki about new or due items. Unreadable or unreachable sources are skipped.
+
+    Returns:
+        Cache mapping ``{gameId: [url, source, ISO date of the check]}``; the URL
+        is empty if the wiki had no image.
+    """
     cache: dict[str, list] = {}
     sources = []
     if OUT_JSON.exists():
@@ -220,7 +342,13 @@ def load_img_cache() -> dict[str, list]:
 
 
 def own_images() -> dict[str, str]:
-    """Eigene Bilder im Ordner bilder/: {gameId: relativer Pfad}."""
+    """
+    List the own images in the bilder/ folder.
+
+    Returns:
+        Mapping ``{lower-cased gameId: relative path "bilder/<file>"}`` for all
+        .webp, .png, .jpg and .jpeg files.
+    """
     out = {}
     if OWN_DIR.is_dir():
         for p in sorted(OWN_DIR.iterdir()):
@@ -230,7 +358,20 @@ def own_images() -> dict[str, str]:
 
 
 def attach_images(entries: list[dict]) -> dict[str, list]:
-    """Jedem Bauplan ein Bild zuordnen (img = URL, imgs = 'e' eigen / 'w' / 'c' Wiki)."""
+    """
+    Attach a tile image to every blueprint, in place.
+
+    Own images win; otherwise the cached wiki thumbnail is used. Items that are
+    new to the cache are looked up in the wiki, plus the oldest due entries
+    (IMG_MISS_DAYS / IMG_HIT_DAYS, at most IMG_REFRESH_MAX per run).
+
+    Args:
+        entries: Blueprint entries from build_data(); each gets ``img`` (URL or
+            path) and ``imgs`` ("e" own, "w"/"c" wiki) if an image exists.
+
+    Returns:
+        The image cache reduced to the gameIds still in use, for data.json.
+    """
     own = own_images()
     cache = load_img_cache()
     today = date.today()
@@ -264,14 +405,27 @@ def attach_images(entries: list[dict]) -> dict[str, list]:
     return {g: v for g, v in cache.items() if g in used}
 
 
+#: A thumbnail URL built by thumb_url() for starcitizen.tools, which the page can rebuild.
 _SCT_THUMB = re.compile(
     r"^https://media\.starcitizen\.tools/thumb/([0-9a-f]/[0-9a-f]{2})/([^/]+)/"
     + str(THUMB_PX) + r"px-\2\.webp(\?\w+)?$")
+#: Worklist of blueprints without an image (basis for own captures).
 MISSING_CSV = HERE / "bilder_fehlend.csv"
 
 
 def compact_entry(e: dict) -> dict:
-    """Für die Seite: gameId weglassen, starcitizen.tools-Thumb als '~a/ab/Datei?q' kürzen."""
+    """
+    Shrink a blueprint entry for embedding in the page.
+
+    Drops the gameId and shortens a starcitizen.tools thumbnail to '~a/ab/file?q';
+    the page rebuilds the full URL in imgUrl().
+
+    Args:
+        e: Blueprint entry from build_data().
+
+    Returns:
+        A new, compacted entry dict.
+    """
     out = {k: v for k, v in e.items() if k != "gid"}
     m = _SCT_THUMB.match(out.get("img", ""))
     if m:
@@ -280,7 +434,15 @@ def compact_entry(e: dict) -> dict:
 
 
 def write_missing_list(entries: list[dict]) -> None:
-    """Arbeitsliste für eigene Aufnahmen: Baupläne ohne Bild (gameId;Name;Kategorie)."""
+    """
+    Write MISSING_CSV, the worklist of blueprints without an image.
+
+    Semicolon-separated (gameId;name;kategorie), sorted by class and name, UTF-8
+    with BOM so that Excel opens it correctly.
+
+    Args:
+        entries: Blueprint entries after attach_images().
+    """
     rows = sorted((e["cls"], e["name"], e["gid"]) for e in entries if not e.get("img"))
     lines = ["gameId;name;kategorie"] + [f"{g};{n};{c}" for c, n, g in rows]
     MISSING_CSV.write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
@@ -288,7 +450,22 @@ def write_missing_list(entries: list[dict]) -> None:
 
 
 def build_data() -> dict:
-    """Baupläne laden und auf das schlanke App-Schema reduzieren."""
+    """
+    Fetch all blueprints and reduce them to the lean app schema.
+
+    Blueprints without a name or without a recipe are skipped. Per contract only
+    the highest drop chance is kept. Each entry carries name, class/subclass,
+    costs (``n`` material, ``q`` quantity, ``mq`` minimum quality), sources
+    (``c`` contract, ``p`` drop chance in %), ``def`` (granted by default), the
+    gameId and the spec fields; images are attached at the end.
+
+    Returns:
+        Data set with ``blueprints``, ``imgCache``, ``classOrder``, ``generated``
+        (UTC timestamp) and ``n``.
+
+    Raises:
+        urllib.error.URLError: If star-head cannot be reached.
+    """
     print("Lade Baupläne (star-head.de) ...")
     bp = get_json(BLUEPRINT_URL)
     print(f"  {len(bp)} Baupläne empfangen.")
@@ -344,7 +521,19 @@ def build_data() -> dict:
 
 
 def fill_header(html: str) -> str:
-    """Gemeinsame Kopfzeile, „Was ist neu?“-Dialog und Changelog einsetzen (kopfzeile.py)."""
+    """
+    Insert the shared header, design assets, "What's new?" dialog and changelog.
+
+    Replaces the placeholders <!--FH_HEADER-->, /*FH_CSS*/, /*FH_JS*/,
+    <!--SD_FONTS--> and <!--FH_DIALOG--> with output from kopfzeile.py and
+    sc_design.py; the changelog is read from CHANGELOG.md.
+
+    Args:
+        html: The page template.
+
+    Returns:
+        The template with all shared parts filled in.
+    """
     b = kz.bi
     actions = (
         '<button class="btn fh-btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden">'
@@ -369,15 +558,21 @@ def fill_header(html: str) -> str:
 
 
 def main() -> int:
+    """
+    Build the data set and write the page, data.json and the missing-image list.
+
+    Returns:
+        Exit code: 0 on success, 1 if the blueprints could not be fetched.
+    """
     try:
         data = build_data()
     except Exception as e:  # noqa: BLE001
         print(f"FEHLER: Baupläne nicht erreichbar: {e}", file=sys.stderr)
         return 1
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    payload = payload.replace("</", "<\\/")  # kein vorzeitiges </script>
-    # Der Bild-Cache (Prüfdaten je gameId) gehört nur in data.json, nicht in die Seite;
-    # in der Seite werden gameId weggelassen und Wiki-Thumb-URLs gekürzt (siehe imgUrl im JS).
+    payload = payload.replace("</", "<\\/")  # no premature </script>
+    # The image cache (check data per gameId) belongs in data.json only, not in the page;
+    # in the page the gameIds are dropped and wiki thumbnail URLs shortened (see imgUrl in JS).
     page = {k: v for k, v in data.items() if k != "imgCache"}
     page["blueprints"] = [compact_entry(e) for e in data["blueprints"]]
     write_missing_list(data["blueprints"])
@@ -385,16 +580,18 @@ def main() -> int:
     html = fill_header(HTML_TEMPLATE).replace("/*__DATA__*/{}", page_payload)
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"Geschrieben: {OUT_HTML} ({OUT_HTML.stat().st_size // 1024} KB)")
-    # Gleicher Datenstand als eigene Datei: der Knopf "Neuesten Stand laden" in der
-    # App holt diese Datei von GitHub Pages statt direkt von star-head.
+    # Same data set as a separate file: the "Load latest build" button in the
+    # app fetches it from GitHub Pages instead of calling star-head directly.
     OUT_JSON.write_text(payload, encoding="utf-8")
     print(f"Geschrieben: {OUT_JSON} ({OUT_JSON.stat().st_size // 1024} KB)")
     return 0
 
 
-# ============================================================ HTML-Template
-# Der Platzhalter /*__DATA__*/{} wird durch das JSON-Objekt ersetzt.
+# ============================================================ HTML template
+#: The page template; main() replaces the placeholder /*__DATA__*/{} with the JSON data
+#: set and fill_header() inserts the shared parts.
 HTML_TEMPLATE = r"""<!DOCTYPE html>
+<!-- SC Bauplan-Planer (SC Blueprint Planner) - generated by bauplan_planer_bauen.py, do not edit by hand. -->
 <html lang="de" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +641,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   input[type=number]{font-family:var(--body);font-size:14px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%}
   input[type=search],select{font-family:var(--body);font-size:15px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
   select{cursor:pointer}
-  /* Mehrfachauswahl-Filter: sieht aus wie ein select, klappt eine Häkchen-Liste auf */
+  /* Multi-select filter: looks like a select, opens a checkbox list */
   .ms{position:relative}
   .ms>summary{list-style:none;font-family:var(--body);font-size:15px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;min-height:40px;cursor:pointer;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:relative;box-sizing:border-box}
   .ms>summary::-webkit-details-marker{display:none}
@@ -548,7 +745,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="sc-ptabs" id="bpTabs"></div>
   <div class="cols">
-    <!-- LINKS: BESCHAFFUNG (oben, scrollbar) + RESSOURCEN -->
+    <!-- LEFT: PROCUREMENT (top, scrollable) + RESOURCES -->
     <div class="left">
       <div class="card" id="cardList">
         <div class="ph"><span class="de">Beschaffungsliste</span><span class="en">Procurement list</span><span class="n" id="matN"></span></div>
@@ -576,7 +773,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- RECHTS: FILTER + AUSWAHL + KATALOG -->
+    <!-- RIGHT: FILTERS + SELECTION + CATALOG -->
     <div class="card" id="cardCat">
       <div class="filters">
         <input type="search" id="q" placeholder="Suchen … (Name / Material)" autocomplete="off">
@@ -649,6 +846,7 @@ const I18N={
 const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta',onlySel:'scbp_onlysel'};
 const root=document.documentElement;
 let LANG=(load(LS.lang)==='en')?'en':'de';
+// Look up a UI string (or string function) in the current language.
 function t(k){return I18N[LANG][k];}
 
 /* ---------- state ---------- */
@@ -658,14 +856,23 @@ let SEL=load(LS.sel)||{}, STOCK=load(LS.stock)||{}, OWNED=load(LS.owned)||{}, OW
 let renderCap=150;
 
 /* ---------- helpers ---------- */
+// Read a JSON value from localStorage; null if missing, unreadable or storage blocked.
 function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
+// Write a JSON value to localStorage; failures (private mode, quota) are ignored.
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+// Escape text for use in HTML content and attribute values.
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// Show a short status message at the bottom of the page for about two seconds.
 function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2200);}
+// Offer text as a file download via a temporary object URL.
 function down(name,text,type){const b=new Blob([text],{type:type||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
+// JS twin of clean_source() in the build script (readable contract names); currently not called by the page.
 function cleanSrc(s){s=String(s).replace(/~\w+\([^)]*\)/g,'(Ort)').trim();if(/^[a-z0-9_]+$/.test(s)){const m=s.match(/blackbox_recover_title_([a-z]+)_/);if(m)return'Black Box Recovery ('+m[1].toUpperCase()+')';return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}return s;}
+// JS twin of spec_fields() in the build script (size/grade/class from a description); currently not called by the page.
 function specOf(desc){desc=String(desc||'').replace(/\\n/g,'\n').replace(/ /g,' ');const g=k=>{const m=desc.match(new RegExp('^'+k+':\\s*(.+?)\\s*$','mi'));return m?m[1].trim():'';};const o={};let s=g('Size').replace(/^s/i,'').trim();if(s)o.sz=s;const gr=g('Grade');if(gr)o.gr=gr;const kl=g('Class');if(kl)o.kl=kl;return o;}
 
+// Load a data set: build the search text per blueprint, mark default-granted ones as owned
+// (until an SCDL import exists) and derive the filter value lists and status lines.
 function ingest(raw){
   BP=(raw.blueprints||[]).map(b=>{
     const s=(b.name+' '+(b.cls||'')+' '+(b.sub||'')+' '+(b.sz?'s'+b.sz:'')+' '+(b.gr||'')+' '+(b.kl||'')+' '+b.costs.map(c=>c.n).join(' ')).toLowerCase();
@@ -692,9 +899,10 @@ const qEl=document.getElementById('q'), fClass=document.getElementById('fClass')
       fSort=document.getElementById('fSort'), listEl=document.getElementById('list'),
       fSize=document.getElementById('fSize'), fGrade=document.getElementById('fGrade'), fKls=document.getElementById('fKls');
 
-/* ---------- Mehrfachauswahl (details/summary + Häkchen) ----------
-   Leere Auswahl = alle. Werte als Set in MS[id].sel; Änderungen lösen 'mschange' am Element aus. */
+/* ---------- Multi-select (details/summary + checkboxes) ----------
+   Empty selection = all. Values as a Set in MS[id].sel; changes fire 'mschange' on the element. */
 const MS={};
+// Turn a <details> element into a multi-select filter; only one panel is open at a time.
 function msInit(el,allKey){
   MS[el.id]={el,sel:new Set(),items:[],allKey};
   el.innerHTML='<summary></summary><div class="mspanel" role="group"></div>';
@@ -710,10 +918,12 @@ function msInit(el,allKey){
   });
   el.addEventListener('toggle',()=>{if(el.open) Object.values(MS).forEach(m=>{if(m.el!==el) m.el.open=false;});});
 }
-function msSet(id,items){   // items: [{v,label,grp?}]; nicht mehr vorhandene Werte fallen aus der Auswahl
+// Set the options of a multi-select; selected values that no longer exist are dropped.
+function msSet(id,items){   // items: [{v,label,grp?}]
   const m=MS[id]; m.items=items; const ok=new Set(items.map(x=>x.v));
   [...m.sel].forEach(v=>{if(!ok.has(v)) m.sel.delete(v);}); msRender(id);
 }
+// Draw the checkbox list, with group headings when the options span several groups.
 function msRender(id){
   const m=MS[id]; let grp=null, html=`<button class="btn msclear" type="button"${m.sel.size?'':' disabled'}>${t('msClear')}</button>`;
   const grouped=new Set(m.items.map(x=>x.grp||'')).size>1;
@@ -723,6 +933,7 @@ function msRender(id){
   }
   m.el.querySelector('.mspanel').innerHTML=html; msLabel(id);
 }
+// Update the summary text: placeholder, up to two names, or first name plus count.
 function msLabel(id){
   const m=MS[id], n=m.sel.size, lab=v=>(m.items.find(x=>x.v===v)||{label:v}).label;
   const vals=m.items.filter(x=>m.sel.has(x.v)).map(x=>x.v);
@@ -734,34 +945,41 @@ document.addEventListener('click',e=>{Object.values(MS).forEach(m=>{if(m.el.open
 document.addEventListener('keydown',e=>{if(e.key==='Escape') Object.values(MS).forEach(m=>{if(m.el.open){m.el.open=false;m.el.querySelector('summary').focus();}});});
 [[fClass,'allClass'],[fSub,'allSub'],[fSize,'allSize'],[fGrade,'allGrade'],[fKls,'allKls']].forEach(([el,k])=>msInit(el,k));
 
+// Fill the category filter and rebuild the dependent filters.
 function buildClassFilter(){
   msSet('fClass',CLASS_ORDER.map(c=>({v:c,label:c})));
   buildSubFilter();
   buildSpecFilters();
 }
+// Fill the size, grade and class filters from the current data.
 function buildSpecFilters(){
   msSet('fSize',SIZES.map(s=>({v:s,label:'S'+s})));
   msSet('fGrade',GRADES.map(s=>({v:s,label:s})));
   msSet('fKls',KLS.map(s=>({v:s,label:s})));
 }
-function buildSubFilter(){   // Unterkategorien der gewählten Kategorien (ohne Wahl: alle), nach Kategorie gruppiert
+// Fill the subcategory filter with the subcategories of the chosen categories (none chosen: all), grouped by category.
+function buildSubFilter(){
   const cl=MS.fClass.sel;
   const items=CLASS_ORDER.filter(c=>!cl.size||cl.has(c)).flatMap(c=>(SUBS[c]||[]).map(s=>({v:c+'|'+s,label:s,grp:c})));
   msSet('fSub',items);
 }
 const onlySelBtn=document.getElementById('onlySel');
 let ONLY_SEL=load(LS.onlySel)===true;
+// Number of selected blueprints that exist in the current catalog.
 function selCount(){return Object.keys(SEL).filter(n=>BP.some(x=>x.name===n)).length;}
+// Sync the selected-only toggle with the selection; switches it off when nothing is selected.
 function syncOnlySel(){
   const n=selCount();
-  if(!n&&ONLY_SEL){ONLY_SEL=false;save(LS.onlySel,false);}   // ohne Auswahl kein leerer Katalog
+  if(!n&&ONLY_SEL){ONLY_SEL=false;save(LS.onlySel,false);}   // no selection, no empty catalog
   onlySelBtn.setAttribute('aria-pressed',ONLY_SEL?'true':'false');
-  document.getElementById('onlySelBox').textContent=ONLY_SEL?'☑':'☐';   // zweites Signal neben der Farbe
+  document.getElementById('onlySelBox').textContent=ONLY_SEL?'☑':'☐';   // second signal besides the colour
   onlySelBtn.disabled=!n;
   onlySelBtn.title=t('onlySelTip');
   document.getElementById('onlySelN').textContent=n?'('+n+')':'';
 }
+// Clear search and all filters and redraw the catalog.
 function resetFilters(){qEl.value='';Object.keys(MS).forEach(id=>MS[id].sel.clear());buildSubFilter();Object.keys(MS).forEach(msRender);fOwned.value='all';renderCap=150;renderList();}
+// Apply search and filters to the catalog and sort it; the owned filter only applies once ownership data exists.
 function filtered(){
   const q=qEl.value.trim().toLowerCase(), ow=fOwned.value,
         cl=MS.fClass.sel, su=MS.fSub.sel, sz=MS.fSize.sel, gr=MS.fGrade.sel, kl=MS.fKls.sel,
@@ -782,31 +1000,37 @@ function filtered(){
   else arr.sort((a,b)=>a.name.localeCompare(b.name));
   return arr;
 }
+// Recipe as chips: quantity, material and minimum-quality badge.
 function recipeChips(b){
   return b.costs.map(c=>`<span class="chip"><span class="q">${c.q}×</span> ${esc(c.n)}${c.mq>0?`<span class="qbadge">Q≥${c.mq}</span>`:''}</span>`).join('');
 }
+// Spec line (size, grade, class); empty if the item has none.
 function specBadge(b){
   const p=[]; if(b.sz)p.push('S'+b.sz); if(b.gr)p.push(b.gr); if(b.kl)p.push(b.kl);
   return p.length?`<div class="spec">${esc(p.join(' · '))}</div>`:'';
 }
+// Source line: first three contracts with drop chance (100 % is not shown), plus a count of the rest.
 function srcLine(b){
   if(!b.src||!b.src.length) return `<div class="srcline"><span class="none">✖ ${t('srcNone')}</span></div>`;
   const parts=b.src.slice(0,3).map(s=>esc(s.c)+(s.p<100?` (${s.p}%)`:''));
   return `<div class="srcline">▸ ${t('src')}: ${parts.join(' · ')}${b.src.length>3?` +${b.src.length-3}`:''}</div>`;
 }
-/* Kachel-Bild: eigenes Bild (bilder/<gameId>) oder Vorschau aus dem Star Citizen Wiki (verlinkt).
-   Lädt erst beim Hineinscrollen; schlägt das Laden fehl (offline, Bild entfernt), verschwindet der Rahmen. */
+/* Tile image: own image (bilder/<gameId>) or thumbnail from the Star Citizen Wiki (linked).
+   Loads only when scrolled into view; if loading fails (offline, image removed), the frame disappears. */
 const IMG_SRC={e:'imgOwn',w:'imgWiki',c:'imgWiki'};
+// Expand the shortened wiki thumbnail from the build script back into a full starcitizen.tools URL.
 function imgUrl(s){   // '~a/ab/Datei?q' -> starcitizen.tools-Thumb (160 px); volle URLs bleiben
   if(!s||s[0]!=='~') return s||'';
   const m=/^~([0-9a-f]\/[0-9a-f]{2})\/([^?]+)(\?.*)?$/.exec(s); if(!m) return '';
   return `https://media.starcitizen.tools/thumb/${m[1]}/${m[2]}/160px-${m[2]}.webp${m[3]||''}`;
 }
+// Tile image markup with source tooltip; lazy-loaded, hidden on load error.
 function picHtml(b){
   if(!b.img) return '';
   const tip=t(IMG_SRC[b.imgs]||'imgWiki');
   return `<div class="pic" title="${esc(tip)}"><img src="${esc(imgUrl(b.img))}" alt="${esc(b.name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('none')"></div>`;
 }
+// Draw the catalog tiles up to renderCap, with a show-more button and a hint when filters hide selected items.
 function renderList(){
   syncOnlySel(); syncMoreN();
   const arr=filtered();
@@ -821,15 +1045,18 @@ function renderList(){
       <div class="addbox"><input type="number" min="1" value="1" aria-label="qty"><button class="addbtn" type="button">+</button></div>
     </div>`).join('');
   if(arr.length>renderCap) html+=`<button class="btn morebtn" id="moreBtn" type="button">${t('more')(arr.length-renderCap)}</button>`;
-  // Bei "nur ausgewählte": sagen, wenn die übrigen Filter gewählte Baupläne verstecken
+  // With "selected only": say when the other filters hide selected blueprints
   const hidden=ONLY_SEL?selCount()-arr.length:0;
   if(hidden>0) html=`<div class="empty" style="grid-column:1/-1">${t('onlySelHidden')(hidden)} <button class="btn" id="resetF" type="button">${t('resetFilters')}</button></div>`+html;
   listEl.innerHTML=html||`<div class="empty">—</div>`;
 }
 
 /* ---------- selection ---------- */
+// Add a quantity of a blueprint to the selection and redraw.
 function addSel(name,qty){SEL[name]=(SEL[name]||0)+Math.max(1,qty|0);save(LS.sel,SEL);renderSel();renderMats();renderList();toast(t('added'));}
+// Set the quantity of a selected blueprint; 0 or less removes it.
 function setSel(name,qty){if(qty<=0)delete SEL[name];else SEL[name]=qty;save(LS.sel,SEL);renderSel();renderMats();renderList();}
+// Draw the selection chips; blueprints missing from the catalog are struck through.
 function renderSel(){
   if(window.BP_TABS) BP_TABS.count('list',Object.keys(SEL).length);
   const keys=Object.keys(SEL);
@@ -843,6 +1070,7 @@ function renderSel(){
 }
 
 /* ---------- material aggregation ---------- */
+// Sum the materials of all selected blueprints, separately per minimum quality, largest first.
 function aggregate(){
   const agg={};
   for(const [nm,cnt] of Object.entries(SEL)){
@@ -851,6 +1079,7 @@ function aggregate(){
   }
   return Object.values(agg).sort((a,b)=>b.q-a.q||a.n.localeCompare(b.n));
 }
+// Draw the procurement table; the remaining column appears only when stock is entered.
 function renderMats(){
   const rows=aggregate();
   const miss=Object.keys(SEL).filter(n=>!BP.find(x=>x.name===n));
@@ -870,6 +1099,7 @@ function renderMats(){
   }
   body.innerHTML=warn+h+'</tbody></table>';
 }
+// Draw the stock inputs for all materials; materials needed by the selection are highlighted.
 function renderRes(){
   document.getElementById('resN').textContent=MATS.length;
   const need=new Set(aggregate().map(r=>r.n));
@@ -878,6 +1108,7 @@ function renderRes(){
 }
 
 /* ---------- export ---------- */
+// Procurement list as plain text (blueprints, then materials with stock and remainder).
 function exportText(){
   const rows=aggregate(), d=new Date().toISOString().slice(0,10);
   let s=`SC Beschaffungsliste — ${d}\n\n`+(LANG==='de'?'Baupläne:':'Blueprints:')+'\n';
@@ -887,6 +1118,7 @@ function exportText(){
     s+=`  ${r.q}× ${r.n}${r.mq>0?` (Q≥${r.mq})`:''}${have?`  [${t('have')} ${have} → ${t('left')} ${leftv}]`:''}\n`;}
   return s;
 }
+// Material totals as CSV (material, minimum quality, need, stock, remainder).
 function exportCsv(){
   let s='Material,MinQuality,Need,Stock,Left\n';
   for(const r of aggregate()){const have=STOCK[r.n]||0,leftv=Math.max(0,r.q-have);
@@ -895,6 +1127,8 @@ function exportCsv(){
 }
 
 /* ---------- SCDL import ---------- */
+// Import owned blueprints from the SCDL export sc_bp_erledigt.json (list or {blueprints}); entries with
+// isDone false are skipped, names matched case-insensitively, default-granted ones always count as owned.
 function importScdl(obj){
   const list=Array.isArray(obj)?obj:(obj&&obj.blueprints);
   if(!Array.isArray(list)) throw new Error('bad');
@@ -916,9 +1150,10 @@ function importScdl(obj){
 }
 
 /* ---------- refresh ---------- */
+// Refresh button: replace the embedded data with the latest published data.json.
 async function refresh(){
-  // Lädt den zuletzt auf GitHub gebauten Datenstand (täglich). Kein Direktzugriff
-  // auf star-head aus dem Browser mehr – das schont die Community-API.
+  // Loads the data set last built on GitHub (daily). No direct access to
+  // star-head from the browser any more - this spares the community API.
   const btn=document.getElementById('refreshBtn'); if(btn.dataset.busy)return;
   btn.dataset.busy='1'; btn.disabled=true;
   try{
@@ -941,6 +1176,7 @@ fClass.addEventListener('mschange',()=>{buildSubFilter();renderCap=150;renderLis
 [fSub,fSize,fGrade,fKls].forEach(el=>el.addEventListener('mschange',()=>{renderCap=150;renderList();}));
 [fOwned,fSort].forEach(el=>el.addEventListener('change',()=>{renderCap=150;renderList();}));
 document.getElementById('fMoreBtn').addEventListener('click',e=>{const f=e.currentTarget.closest('.filters');const on=f.classList.toggle('showmore');e.currentTarget.setAttribute('aria-expanded',on?'true':'false');});
+// Show how many of the filters behind More filters are active (narrow screens).
 function syncMoreN(){const n=['fSize','fGrade','fKls'].reduce((a,k)=>a+(MS[k]&&MS[k].sel.size?1:0),0)+(fOwned.value!=='all'?1:0);document.getElementById('fMoreN').textContent=n?'('+n+')':'';}
 onlySelBtn.addEventListener('click',()=>{ONLY_SEL=!ONLY_SEL;save(LS.onlySel,ONLY_SEL);renderCap=150;renderList();});
 listEl.addEventListener('click',e=>{if(e.target.closest('#resetF'))resetFilters();});
@@ -979,9 +1215,10 @@ document.getElementById('themeBtn').addEventListener('click',()=>{
   const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
   root.setAttribute('data-theme',next);save(LS.theme,next);
 });
+// Translate all elements marked with data-i18n.
 function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});}
 
-/* ---------- Reiter auf schmalen Bildschirmen (Katalog zuerst) ---------- */
+/* ---------- Tabs on narrow screens (catalog first) ---------- */
 window.BP_TABS=scPanels(document.getElementById('bpTabs'),[
   {key:'kat',label:'<span class="de">Katalog</span><span class="en">Catalog</span>',els:[document.getElementById('cardCat')]},
   {key:'list',label:'<span class="de">Beschaffung</span><span class="en">Procurement</span>',els:[document.getElementById('cardList')]},

@@ -1,25 +1,48 @@
-"""Gemeinsames Design der SC-Tools: Farben (hell/dunkel), Schriften, Grundbausteine,
-Touch- und Handy-Regeln sowie der Panel-Umschalter für schmale Bildschirme.
-
-Diese Datei ist in allen vier Repos IDENTISCH (StarCitizen-Bauplan-Planer, -Wikelo-Planer,
--Handels-Planer, -Screenshot-Auswerter), genau wie kopfzeile.py. Änderungen immer in alle
-vier übernehmen (md5 vergleichen).
-
-Einbau je Tool: CSS ganz am Ende des <style> (gewinnt gegen ältere Tool-Regeln), JS am Ende
-des Haupt-Skripts. Tool-eigene Farben werden aus diesen Tokens abgeleitet, nicht neu erfunden.
-"""
+# =============================================================================
+# Autor:          Robert Seebauer
+# Repository:     https://github.com/Jaegerfeld (identisch in StarCitizen-Bauplan-Planer,
+#                 -Wikelo-Planer, -Handels-Planer und -Screenshot-Auswerter)
+# KI-Unterstützung: Erstellt mit Unterstützung von Claude (Anthropic)
+# Erstellt:       01.11.2026
+# Geändert:       01.11.2026
+# Lizenz:         BSD-3-Clause (siehe LICENSE)
+#
+# Fachliche Funktion:
+#   Gemeinsames Design der vier Star-Citizen-Tools: Farben für Hell und Dunkel,
+#   Schriften (Rajdhani für Überschriften, Exo 2 für Text), Grundbausteine
+#   (Knöpfe inkl. Haupt- und Löschknopf, Eingabefelder, Fokusrahmen), die
+#   Regeln für Touch-Geräte und Handys sowie der Panel-Umschalter, der auf
+#   schmalen Bildschirmen Spalten durch Reiter ersetzt.
+#
+#   Die Datei liegt byte-gleich in allen vier Repos, genau wie kopfzeile.py;
+#   Änderungen immer in alle vier kopieren (md5 vergleichen). Jedes Tool setzt
+#   das CSS als letztes in sein <style>, damit es gegen ältere Tool-Regeln
+#   gewinnt, und das JS ans Ende seines Haupt-Skripts. Tool-eigene Farben
+#   werden aus diesen Tokens abgeleitet, nicht neu erfunden (Wikelo: --w-*).
+#
+#   Der Desktop bleibt das Hauptgerät: Unter 920 px Breite erscheinen Reiter,
+#   Touch-Regeln hängen am Zeigertyp (pointer: coarse) statt an der Breite,
+#   damit auch Tablets 44-px-Treffflächen bekommen. Helles Amber ist auf
+#   #96591a abgedunkelt, damit Text auf Hellgrau mindestens 4,5:1 erreicht.
+# =============================================================================
+"""Shared design tokens, base components, responsive rules and the narrow-screen panel switcher."""
 from __future__ import annotations
 
+#: Version of this shared design kit; bump it on every change and copy to all four repos.
 DESIGN_VERSION = "1"
-NARROW = 920   # darunter: Panel-Umschalter statt Spalten (Handy, Tablet hochkant)
+#: Breakpoint in px: below it, multi-column tools show tabs instead of columns (phone, tablet portrait).
+NARROW = 920
 
+#: Google Fonts link for the shared fonts; replaces each tool's own font link.
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
          '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
          '<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800'
          '&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">')
 
+#: Shared stylesheet; injected last so it wins over older tool rules.
 CSS = r"""
-/* ===== Gemeinsames Design (sc_design.py, in allen vier Tools identisch) ===== */
+/* ===== Shared design (sc_design.py, identical in all four tools) ===== */
+/* Colour tokens: :root is the light theme, [data-theme="dark"] the dark one. */
 :root{
   --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef1f5; --ink:#141922; --muted:#5a6472;
   --line:#d5dbe3; --accent:#0e7c86; --accent2:#96591a; --ok:#2e8b57; --bad:#b3452f;
@@ -52,7 +75,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 
-/* Panel-Umschalter: nur auf schmalen Bildschirmen sichtbar */
+/* Panel switcher: only visible on narrow screens */
 .sc-ptabs{display:none}
 @media (max-width:919px){
   .sc-ptabs{display:flex;position:sticky;top:0;z-index:30;gap:0;margin:10px 0 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
@@ -64,7 +87,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
   .sc-phide{display:none!important}
 }
 
-/* Handy: Kopf kompakter, Inhalt zuerst */
+/* Phone: compact header so the content comes first */
 @media (max-width:600px){
   .fh{padding:16px 0 8px}
   .fh .fh-lede{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px}
@@ -72,7 +95,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
   .fh .fh-btn{padding:8px 10px}
   .fh .fh-data{font-size:12px}
 }
-/* „Weitere Tools“: auf breiten Bildschirmen immer offen, Auslöser unsichtbar */
+/* "More tools": always open on wide screens with the toggle hidden; collapsible on phones */
 .fh .fh-navd>summary{display:none}
 @media (max-width:600px){
   .fh .fh-navd>summary{display:inline-flex;align-items:center;gap:6px;list-style:none;cursor:pointer;font-family:var(--fh-disp);font-weight:600;font-size:13px;letter-spacing:.04em;color:var(--fh-accent2);min-height:40px;margin-top:6px}
@@ -83,7 +106,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
   .fh .fh-navd .fh-navlbl{display:none}
 }
 
-/* Touch-Geräte (Handy und Tablet): Treffflächen ≥ 44 px */
+/* Touch devices (phone and tablet): hit targets of at least 44 px */
 @media (pointer:coarse){
   .btn,.fh .fh-btn,.fh .fh-seg,.fh .fh-seg button,select,input[type=text],input[type=search],input[type=number]{min-height:44px}
   .fh .fh-nav a,.fh .fh-navd>summary{min-height:44px}
@@ -93,10 +116,12 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 }
 """
 
+#: Shared behaviour: the panel switcher and the collapsed "More tools" row on phones.
 JS = r"""
-/* ===== Gemeinsames Design (sc_design.py, in allen vier Tools identisch) ===== */
-// Panel-Umschalter für schmale Bildschirme. items: [{key, label (HTML), els:[Elemente]}]
-// Panels werden nur per Klasse ausgeblendet, nie aus dem DOM entfernt (Handler hängen an ids).
+/* ===== Shared design (sc_design.py, identical in all four tools) ===== */
+// Panel switcher for narrow screens. items: [{key, label (HTML), els:[elements]}], first: key shown first.
+// Panels are only hidden by class, never removed from the DOM (tool handlers are bound by id).
+// Returns {set(key), count(key, n)} to switch panels and show a badge count on a tab.
 function scPanels(bar, items, first){
   if(!bar) return {set(){}, count(){}};
   let cur=first||items[0].key;
@@ -111,6 +136,6 @@ function scPanels(bar, items, first){
   show(cur);
   return {set:show, count(k,n){const s=bar.querySelector(`button[data-k="${k}"] .n`); if(s){s.hidden=!n; s.textContent=n||'';}}};
 }
-// „Weitere Tools“ auf dem Handy eingeklappt starten
+// Start with "More tools" collapsed on phones.
 (function(){const d=document.querySelector('.fh-navd'); if(d&&window.matchMedia('(max-width:600px)').matches) d.removeAttribute('open');})();
 """
