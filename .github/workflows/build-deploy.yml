@@ -35,6 +35,7 @@ jobs:
           mkdir -p _site
           cp SC_Bauplan_Planer.html _site/index.html
           cp data.json _site/data.json
+          if [ -d bilder ]; then cp -r bilder _site/bilder; fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
