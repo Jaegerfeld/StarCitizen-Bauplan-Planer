@@ -24,6 +24,9 @@ import urllib.request
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import kopfzeile as kz
+from version import VERSION
+
 BLUEPRINT_URL = "https://api.star-head.de/blueprint"
 HERE = Path(__file__).parent
 OUT_HTML = HERE / "SC_Bauplan_Planer.html"
@@ -339,6 +342,34 @@ def build_data() -> dict:
     }
 
 
+def fill_header(html: str) -> str:
+    """Gemeinsame Kopfzeile, „Was ist neu?“-Dialog und Changelog einsetzen (kopfzeile.py)."""
+    b = kz.bi
+    actions = (
+        '<button class="btn fh-btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden">'
+        f'📥 {b("Erworbene (SCDL)", "Import owned (SCDL)")}</button>'
+        '<button class="btn fh-btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">'
+        f'💾 {b("Speichern", "Save")}</button>'
+        '<button class="btn fh-btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">'
+        f'📂 {b("Laden", "Load")}</button>')
+    refresh = ('<button class="btn fh-btn" id="refreshBtn" type="button" title="Neuesten täglich gebauten Datenstand von GitHub laden">'
+               f'🔄 {b("Neuesten Stand laden (GitHub)", "Load latest build (GitHub)")}</button>')
+    head = kz.header_html(
+        "bauplan",
+        eyebrow=("Crafting · Materialplanung", "Crafting · Material planning"),
+        title=("SC Bauplan-Planer", "SC Blueprint Planner"),
+        lede=("Baupläne wählen, Materialbedarf sehen, Beschaffung planen. Rezepte und Quellen von "
+              "star-head.de – patch-abhängig, im Spiel gegenprüfen.",
+              "Pick blueprints, see the material needs, plan the procurement. Recipes and sources "
+              "from star-head.de – patch-dependent, verify in game."),
+        version=VERSION, actions=actions, refresh=refresh,
+        data='<span id="buildStat"></span>')
+    html = html.replace("<!--FH_HEADER-->", head)
+    html = html.replace("/*FH_CSS*/", kz.CSS).replace("/*FH_JS*/", kz.JS)
+    return html.replace("<!--FH_DIALOG-->", kz.dialog_html("bauplan", VERSION) + "\n"
+                        + kz.changelog_script(HERE / "CHANGELOG.md"))
+
+
 def main() -> int:
     try:
         data = build_data()
@@ -353,7 +384,7 @@ def main() -> int:
     page["blueprints"] = [compact_entry(e) for e in data["blueprints"]]
     write_missing_list(data["blueprints"])
     page_payload = json.dumps(page, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    html = HTML_TEMPLATE.replace("/*__DATA__*/{}", page_payload)
+    html = fill_header(HTML_TEMPLATE).replace("/*__DATA__*/{}", page_payload)
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"Geschrieben: {OUT_HTML} ({OUT_HTML.stat().st_size // 1024} KB)")
     # Gleicher Datenstand als eigene Datei: der Knopf "Neuesten Stand laden" in der
@@ -504,28 +535,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .left{position:static;max-height:none}
     .list{max-height:none}
   }
+/*FH_CSS*/
 </style>
 </head>
 <body>
 <div class="hazard"></div>
 <div class="wrap">
-  <header>
-    <p class="eyebrow"><span class="de">Crafting · Materialplanung</span><span class="en">Crafting · Material planning</span></p>
-    <h1><span class="de">Star Citizen — Bauplan-Planer</span><span class="en">Star Citizen — Blueprint Planner</span></h1>
-    <div class="toolbar">
-      <button class="btn" id="langBtn" type="button">EN / DE</button>
-      <button class="btn" id="themeBtn" type="button"><span class="de">Hell / Dunkel</span><span class="en">Light / Dark</span></button>
-      <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/" target="_blank" rel="noopener" title="Zum Wikelo-Ressourcen-Planer wechseln">🔀 <span class="de">Wikelo-Planer</span><span class="en">Wikelo Planner</span></a>
-      <a class="btn swap" href="https://jaegerfeld.github.io/StarCitizen-Handels-Planer/" target="_blank" rel="noopener" title="Zum Handels-Planer wechseln">🔀 <span class="de">Handels-Planer</span><span class="en">Trade Planner</span></a>
-      <a class="btn swap" href="https://jaegerfeld.github.io/sc-guides/" target="_blank" rel="noopener" title="Zur Übersicht aller Guides und Planer">📚 <span class="de">Guides-Übersicht</span><span class="en">Guides overview</span></a>
-      <button class="btn" id="scdlBtn" type="button" title="sc_bp_erledigt.json aus dem SCDL-Launcher laden"><span class="de">📥 Erworbene (SCDL)</span><span class="en">📥 Import owned (SCDL)</span></button>
-      <button class="btn" id="refreshBtn" type="button" title="Neuesten täglich gebauten Datenstand von GitHub laden"><span class="de">🔄 Neuesten Stand laden (GitHub)</span><span class="en">🔄 Load latest build (GitHub)</span></button>
-      <button class="btn" id="stateBtn" type="button" title="Auswahl + Bestand als JSON speichern">💾 <span class="de">Speichern</span><span class="en">Save</span></button>
-      <button class="btn" id="loadStateBtn" type="button" title="Gespeicherten Zustand laden">📂 <span class="de">Laden</span><span class="en">Load</span></button>
-      <div class="spacer"></div>
-      <span class="stat" id="buildStat"></span>
-    </div>
-  </header>
+<!--FH_HEADER-->
 
   <div class="cols">
     <!-- LINKS: BESCHAFFUNG (oben, scrollbar) + RESSOURCEN -->
@@ -940,8 +956,9 @@ document.getElementById('refreshBtn').addEventListener('click',refresh);
 document.getElementById('fileScdl').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{importScdl(JSON.parse(rd.result));}catch(err){toast(t('scdlErr'));}};rd.readAsText(f);e.target.value='';});
 document.getElementById('fileState').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const o=JSON.parse(rd.result);SEL=o.sel||{};STOCK=o.stock||{};if(o.owned){OWNED=o.owned;OWNMETA=o.ownMeta||{ts:'',matched:Object.keys(OWNED).length,unmatched:[]};fOwned.disabled=false;}save(LS.sel,SEL);save(LS.stock,STOCK);save(LS.owned,OWNED);save(LS.ownMeta,OWNMETA);renderRes();renderList();renderSel();renderMats();toast(t('stateOk'));}catch(err){toast(t('stateErr'));}};rd.readAsText(f);e.target.value='';});
 
-document.getElementById('langBtn').addEventListener('click',()=>{
-  LANG=LANG==='en'?'de':'en'; save(LS.lang,LANG);
+document.getElementById('langBtn').addEventListener('click',e=>{
+  const lb=e.target.closest('[data-lang]'); if(!lb||lb.dataset.lang===LANG) return;
+  LANG=lb.dataset.lang; save(LS.lang,LANG);
   root.setAttribute('data-lang',LANG); root.setAttribute('lang',LANG);
   applyI18n();buildClassFilter();renderRes();renderList();renderSel();renderMats();
 });
@@ -959,7 +976,9 @@ function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.te
   if(OWNMETA!==null)fOwned.disabled=false;
   applyI18n();buildClassFilter();renderRes();renderList();renderSel();renderMats();
 })();
+/*FH_JS*/
 </script>
+<!--FH_DIALOG-->
 </body>
 </html>
 """
