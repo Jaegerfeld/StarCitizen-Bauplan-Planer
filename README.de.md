@@ -10,6 +10,7 @@ Ein Standalone-HTML-Tool (offline lauffähig), das **alle craftbaren Star-Citize
 - **Layout wie der Wikelo-Planer:** links die **verfügbaren Ressourcen** eingeben, rechts die **Baupläne auswählen**.
 - **Zweistufiger Kategoriefilter:** Klasse (Rüstung, Helme, FPS-Waffen, Schiffswaffen, Schiffskomponenten, Werkzeuge …) → abhängige Unterklasse (Leichte/Schwere Rüstung, Pistole, Gewehr …).
 - **Erworben-Filter:** nach dem Import der eigenen Liste nur erworbene / nicht erworbene Baupläne zeigen.
+- **Nur ausgewählte:** Schalter in der Filterleiste zeigt nur die gewählten Baupläne; die übrigen Filter gelten weiter.
 - **Beschaffungsliste:** Materialbedarf über die Auswahl summiert, abzüglich Bestand („noch benötigt"); Export als Text/CSV, Zustand als JSON.
 - **SCDL-Import (Zugabe):** erworbene Baupläne aus dem [SC-Deutsch-Launcher](https://sc-deutsch.de) (`sc_bp_erledigt.json`) einlesen und markieren.
 - Zweisprachig (DE/EN), Hell/Dunkel, localStorage-Persistenz.
