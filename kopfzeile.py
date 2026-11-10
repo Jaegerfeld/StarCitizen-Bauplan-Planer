@@ -1,15 +1,15 @@
 # =============================================================================
 # Autor:          Robert Seebauer
 # Repository:     https://github.com/Jaegerfeld (identisch in StarCitizen-Bauplan-Planer,
-#                 -Wikelo-Planer, -Handels-Planer und -Screenshot-Auswerter)
+#                 -Wikelo-Planer, -Handels-Planer, -Schiffskauf-Planer und -Screenshot-Auswerter)
 # KI-Unterstützung: Erstellt mit Unterstützung von Claude (Anthropic)
 # Erstellt:       01.11.2026
-# Geändert:       01.11.2026
+# Geändert:       10.11.2026
 # Lizenz:         BSD-3-Clause (siehe LICENSE)
 #
 # Fachliche Funktion:
-#   Gemeinsame Kopfzeile und „Was ist neu?“-Dialog der vier Star-Citizen-Tools.
-#   Die Datei liegt byte-gleich in allen vier Repos; Änderungen immer in alle
+#   Gemeinsame Kopfzeile und „Was ist neu?“-Dialog der fünf Star-Citizen-Tools.
+#   Die Datei liegt byte-gleich in allen fünf Repos; Änderungen immer in alle
 #   vier kopieren (md5 vergleichen), sonst laufen die Kopfzeilen wieder
 #   auseinander – genau das war vor dieser Datei der Fall.
 #
@@ -33,8 +33,8 @@ import html
 import json
 from pathlib import Path
 
-#: Version of this shared header kit; bump it on every change and copy to all four repos.
-KIT_VERSION = "2"
+#: Version of this shared header kit; bump it on every change and copy to all five repos.
+KIT_VERSION = "3"
 
 #: Navigation targets as (key, German name, English name, online URL, icon).
 #: The list order is the order of the "More tools" row; the current tool is left out.
@@ -45,6 +45,8 @@ TOOLS = [
      "https://jaegerfeld.github.io/StarCitizen-Wikelo-Planer/", "🧮"),
     ("handel", "Handels-Planer", "Trade Planner",
      "https://jaegerfeld.github.io/StarCitizen-Handels-Planer/", "📈"),
+    ("schiffskauf", "Schiffskauf-Planer", "Ship Purchase Planner",
+     "https://jaegerfeld.github.io/StarCitizen-Schiffskauf-Planer/", "🚀"),
     ("auswerter", "Screenshot-Auswerter", "Screenshot Reader",
      "https://jaegerfeld.github.io/StarCitizen-Screenshot-Auswerter/", "📷"),
     ("guides", "Guides-Übersicht", "Guides overview", "https://jaegerfeld.github.io/sc-guides/", "📚"),
@@ -54,6 +56,7 @@ REPOS = {
     "bauplan": "https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer",
     "wikelo": "https://github.com/Jaegerfeld/StarCitizen-Wikelo-Planer",
     "handel": "https://github.com/Jaegerfeld/StarCitizen-Handels-Planer",
+    "schiffskauf": "https://github.com/Jaegerfeld/StarCitizen-Schiffskauf-Planer",
     "auswerter": "https://github.com/Jaegerfeld/StarCitizen-Screenshot-Auswerter",
 }
 
@@ -197,7 +200,7 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 
 #: Header and dialog styles, scoped under .fh / .fh-modal with their own --fh-* tokens.
 CSS = r"""
-/* ===== Shared header (kopfzeile.py, identical in all four tools) ===== */
+/* ===== Shared header (kopfzeile.py, identical in all five tools) ===== */
 .fh,.fh-modal{--fh-ink:#e8edf4;--fh-muted:#8b97a8;--fh-line:#243040;--fh-panel:#121822;--fh-panel2:#0e131c;--fh-accent:#3fd0dd;--fh-accent2:#f0a94a;--fh-on:#0a0e14;--fh-disp:'Exo 2',system-ui,sans-serif;--fh-body:'Rajdhani',system-ui,sans-serif}
 [data-theme="light"] .fh,[data-theme="light"] .fh-modal{--fh-ink:#141922;--fh-muted:#5a6472;--fh-line:#d5dbe3;--fh-panel:#ffffff;--fh-panel2:#eef1f5;--fh-accent:#0e7c86;--fh-accent2:#96591a;--fh-on:#ffffff}
 /* Bilingual text: show the variant that matches <html lang|data-lang>. */
@@ -250,7 +253,7 @@ html[lang="en"] p.fh-en{display:block}
 
 #: Header behaviour: language switch state and the changelog dialog (Markdown subset renderer).
 JS = r"""
-/* ===== Shared header (kopfzeile.py, identical in all four tools) ===== */
+/* ===== Shared header (kopfzeile.py, identical in all five tools) ===== */
 (function(){
   const root=document.documentElement;
   // Mark the active language in every DE|EN switch (aria-pressed); follows <html lang|data-lang>.
