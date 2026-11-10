@@ -1,21 +1,21 @@
 # =============================================================================
 # Autor:          Robert Seebauer
 # Repository:     https://github.com/Jaegerfeld (identisch in StarCitizen-Bauplan-Planer,
-#                 -Wikelo-Planer, -Handels-Planer und -Screenshot-Auswerter)
+#                 -Wikelo-Planer, -Handels-Planer, -Schiffskauf-Planer und -Screenshot-Auswerter)
 # KI-Unterstützung: Erstellt mit Unterstützung von Claude (Anthropic)
 # Erstellt:       01.11.2026
-# Geändert:       01.11.2026
+# Geändert:       10.11.2026
 # Lizenz:         BSD-3-Clause (siehe LICENSE)
 #
 # Fachliche Funktion:
-#   Gemeinsames Design der vier Star-Citizen-Tools: Farben für Hell und Dunkel,
+#   Gemeinsames Design der fünf Star-Citizen-Tools: Farben für Hell und Dunkel,
 #   Schriften (Rajdhani für Überschriften, Exo 2 für Text), Grundbausteine
 #   (Knöpfe inkl. Haupt- und Löschknopf, Eingabefelder, Fokusrahmen), die
 #   Regeln für Touch-Geräte und Handys sowie der Panel-Umschalter, der auf
 #   schmalen Bildschirmen Spalten durch Reiter ersetzt.
 #
-#   Die Datei liegt byte-gleich in allen vier Repos, genau wie kopfzeile.py;
-#   Änderungen immer in alle vier kopieren (md5 vergleichen). Jedes Tool setzt
+#   Die Datei liegt byte-gleich in allen fünf Repos, genau wie kopfzeile.py;
+#   Änderungen immer in alle fünf kopieren (md5 vergleichen). Jedes Tool setzt
 #   das CSS als letztes in sein <style>, damit es gegen ältere Tool-Regeln
 #   gewinnt, und das JS ans Ende seines Haupt-Skripts. Tool-eigene Farben
 #   werden aus diesen Tokens abgeleitet, nicht neu erfunden (Wikelo: --w-*).
@@ -28,8 +28,8 @@
 """Shared design tokens, base components, responsive rules and the narrow-screen panel switcher."""
 from __future__ import annotations
 
-#: Version of this shared design kit; bump it on every change and copy to all four repos.
-DESIGN_VERSION = "1"
+#: Version of this shared design kit; bump it on every change and copy to all five repos.
+DESIGN_VERSION = "2"
 #: Breakpoint in px: below it, multi-column tools show tabs instead of columns (phone, tablet portrait).
 NARROW = 920
 
@@ -41,7 +41,7 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 
 #: Shared stylesheet; injected last so it wins over older tool rules.
 CSS = r"""
-/* ===== Shared design (sc_design.py, identical in all four tools) ===== */
+/* ===== Shared design (sc_design.py, identical in all five tools) ===== */
 /* Colour tokens: :root is the light theme, [data-theme="dark"] the dark one. */
 :root{
   --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef1f5; --ink:#141922; --muted:#5a6472;
@@ -118,7 +118,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 
 #: Shared behaviour: the panel switcher and the collapsed "More tools" row on phones.
 JS = r"""
-/* ===== Shared design (sc_design.py, identical in all four tools) ===== */
+/* ===== Shared design (sc_design.py, identical in all five tools) ===== */
 // Panel switcher for narrow screens. items: [{key, label (HTML), els:[elements]}], first: key shown first.
 // Panels are only hidden by class, never removed from the DOM (tool handlers are bound by id).
 // Returns {set(key), count(key, n)} to switch panels and show a badge count on a tab.

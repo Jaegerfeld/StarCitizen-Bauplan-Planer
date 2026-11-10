@@ -1,10 +1,11 @@
 # Contributing / Conventions
 
 These conventions mirror the [situation-report](https://github.com/Jaegerfeld/situation-report)
-project, so quality standards stay consistent across projects. They apply to all four Star
+project, so quality standards stay consistent across projects. They apply to all five Star
 Citizen tools ([Bauplan-Planer](https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer),
 [Wikelo-Planer](https://github.com/Jaegerfeld/StarCitizen-Wikelo-Planer),
 [Handels-Planer](https://github.com/Jaegerfeld/StarCitizen-Handels-Planer),
+[Schiffskauf-Planer](https://github.com/Jaegerfeld/StarCitizen-Schiffskauf-Planer),
 [Screenshot-Auswerter](https://github.com/Jaegerfeld/StarCitizen-Screenshot-Auswerter)),
 scaled to their size: a small stdlib Python build step plus a self-contained HTML app.
 
@@ -54,7 +55,7 @@ Same standard as situation-report.
    already says.
 5. **Shared files** [`kopfzeile.py`](kopfzeile.py) (header and "What's new?" dialog) and
    [`sc_design.py`](sc_design.py) (design tokens, responsive rules) are **byte-identical in all
-   four repos**. Change them in one place, copy to all four, and compare the md5 sums.
+   five repos**. Change them in one place, copy to all five, and compare the md5 sums.
 
 ## Versioning & changelog
 
