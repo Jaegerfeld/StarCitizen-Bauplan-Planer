@@ -36,8 +36,8 @@ The Blueprint Planner lists all craftable Star Citizen blueprints with recipe an
 Goal: you want to craft two armor pieces and find out which materials you still need.
 
 1. Open the planner. On a phone, tap the **Catalog** tab at the top.
-2. Click **all categories** and tick **Rüstung** (armor). Category names are shown in German in both languages. Click next to the list to close it.
-3. Narrow it down further with **all subcategories** if you like, for example to **Leichte Rüstung** (light armor).
+2. Click **all categories** and tick **Armor**. Click next to the list to close it.
+3. Narrow it down further with **all subcategories** if you like, for example to **Light armor**.
 4. Type the name of the piece into the search field. The number of results is shown on the right of the filter bar.
 5. Enter the quantity at the bottom of the tile (default is 1) and click **+**. The blueprint appears in the selection bar above the catalog.
 6. Repeat this for the second piece. Use **−** and **+** in the selection bar to change the quantity, and **✕** to remove a blueprint.

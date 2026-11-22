@@ -14,4 +14,4 @@
 """Single source of the SC Blueprint Planner's version number (SemVer)."""
 
 #: Current version of the tool, shown in the page header and the "What's new?" dialog.
-VERSION = "1.9.0"
+VERSION = "1.9.1"

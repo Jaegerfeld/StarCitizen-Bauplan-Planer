@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.9.1] – 2026-11-22
+
+### Behoben
+- Englische Ansicht: Kategorien und Unterkategorien (Filter, Gruppenköpfe, Kachel-Schild) und der Platzhalter im Suchfeld erscheinen jetzt auf Englisch; die Suche findet beide Sprachen. Die Daten bleiben deutsch, gespeicherte Filter gelten weiter.
+
 ## [1.9.0] – 2026-11-21
 
 ### Hinzugefügt
