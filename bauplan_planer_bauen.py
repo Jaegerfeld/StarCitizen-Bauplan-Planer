@@ -142,6 +142,27 @@ TAXO = {
     "Tractor Beam": ("Werkzeuge", "Traktorstrahl"),
     "Fuel Nozzle": ("Werkzeuge", "Tankdüse"),
 }
+#: English display names for the German class and subclass labels in TAXO (data values stay German).
+#: Unknown fine types that fall through as their own subclass are shown unchanged.
+CAT_EN = {
+    "Rüstung": "Armor", "Leichte Rüstung": "Light armor", "Mittlere Rüstung": "Medium armor",
+    "Schwere Rüstung": "Heavy armor", "Rüstungskern": "Core armor", "Undersuit": "Undersuit", "Rucksack": "Backpack",
+    "Helme": "Helmets", "Leichter Helm": "Light helmet", "Mittlerer Helm": "Medium helmet",
+    "Schwerer Helm": "Heavy helmet", "Helm": "Helmet",
+    "Kleidung": "Clothing", "Oberkörper": "Torso", "Beine": "Legs", "Füße": "Feet",
+    "FPS-Waffen": "FPS weapons", "Pistole": "Pistol", "Gewehr": "Rifle", "SMG": "SMG", "Schrotflinte": "Shotgun",
+    "Scharfschützengewehr": "Sniper rifle", "LMG": "LMG", "Sonstige Waffe": "Other weapon",
+    "Magazine": "Magazines", "Magazin": "Magazine",
+    "Schiffswaffen": "Ship weapons", "Laser-Kanone": "Laser cannon", "Laser-Repeater": "Laser repeater",
+    "Laser-Gatling": "Laser gatling", "Ballistik-Kanone": "Ballistic cannon", "Ballistik-Gatling": "Ballistic gatling",
+    "Ballistik-Repeater": "Ballistic repeater", "Mass Driver": "Mass driver", "Neutronen-Kanone": "Neutron cannon",
+    "Scattergun": "Scattergun", "Distortion-Kanone": "Distortion cannon", "Distortion-Repeater": "Distortion repeater",
+    "Schiffskomponenten": "Ship components", "Kraftwerk": "Power plant", "Kühler": "Cooler", "Schild": "Shield",
+    "Radar": "Radar", "Quantum-Antrieb": "Quantum drive",
+    "Werkzeuge": "Tools", "Mining-Laser": "Mining laser", "Salvage-Kopf": "Salvage head",
+    "Salvage-Modul": "Salvage modifier", "Traktorstrahl": "Tractor beam", "Tankdüse": "Fuel nozzle",
+    "Sonstiges": "Other",
+}
 #: Order of the classes in the category filter.
 CLASS_ORDER = [
     "Rüstung", "Helme", "Kleidung", "FPS-Waffen", "Magazine",
@@ -577,7 +598,10 @@ def main() -> int:
     page["blueprints"] = [compact_entry(e) for e in data["blueprints"]]
     write_missing_list(data["blueprints"])
     page_payload = json.dumps(page, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    html = fill_header(HTML_TEMPLATE).replace("/*__DATA__*/{}", page_payload)
+    missing = sorted({x for pair in TAXO.values() for x in pair} - CAT_EN.keys())
+    assert not missing, f"CAT_EN fehlt: {missing}"
+    html = (fill_header(HTML_TEMPLATE).replace("/*__DATA__*/{}", page_payload)
+            .replace("/*__CAT_EN__*/{}", json.dumps(CAT_EN, ensure_ascii=False)))
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"Geschrieben: {OUT_HTML} ({OUT_HTML.stat().st_size // 1024} KB)")
     # Same data set as a separate file: the "Load latest build" button in the
@@ -776,7 +800,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <!-- RIGHT: FILTERS + SELECTION + CATALOG -->
     <div class="card" id="cardCat">
       <div class="filters">
-        <input type="search" id="q" placeholder="Suchen … (Name / Material)" autocomplete="off">
+        <input type="search" id="q" placeholder="Suchen … (Name / Material)" data-i18n-ph="searchPh" autocomplete="off">
         <details class="ms" id="fClass"></details>
         <details class="ms" id="fSub"></details>
         <button class="btn fmorebtn" id="fMoreBtn" type="button" aria-expanded="false"><span class="de">Weitere Filter</span><span class="en">More filters</span> <span id="fMoreN"></span></button>
@@ -813,6 +837,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 const RAW = /*__DATA__*/{};
+// English display names of the German category labels (filled in by the build script).
+const CAT_EN = /*__CAT_EN__*/{};
+// Category or subcategory label in the current language; data values stay German.
+const catL = c => LANG==='en' ? (CAT_EN[c]||c) : c;
 const DATA_URL='https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/data.json';
 let CUR_GEN=RAW.generated||'';
 </script>
@@ -829,7 +857,7 @@ const I18N={
     refOk:'Neuester Stand geladen.',refErr:'GitHub nicht erreichbar – bestehende Daten bleiben.',refSame:'Du hast bereits den neuesten Stand.',stateOk:'Zustand geladen.',stateErr:'Zustand nicht lesbar.',
     results:'Treffer',more:n=>`… ${n} weitere anzeigen`,
     onlySel:'nur ausgewählte',onlySelTip:'Katalog auf die gewählten Baupläne beschränken (andere Filter gelten weiter)',
-    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen',msClear:'Auswahl löschen (alle)',
+    onlySelHidden:n=>`Die übrigen Filter blenden ${n} gewählte(n) Bauplan/Baupläne aus.`,resetFilters:'Filter zurücksetzen',msClear:'Auswahl löschen (alle)',searchPh:'Suchen … (Name / Material)',
     imgWiki:'Bild: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Bild: eigene Aufnahme · © CIG'},
   en:{ownAll:'all',ownYes:'owned only',ownNo:'not owned only',sortName:'Name A–Z',sortMats:'fewest materials',
     src:'Source',srcNone:'source unknown',mat:'Material',need:'need',left:'left',allClass:'all categories',allSub:'all subcategories',allSize:'all sizes',allGrade:'all grades',allKls:'all classes',
@@ -840,7 +868,7 @@ const I18N={
     refOk:'Latest build loaded.',refErr:'GitHub unreachable – keeping current data.',refSame:'You already have the latest build.',stateOk:'State loaded.',stateErr:'State not readable.',
     results:'results',more:n=>`… show ${n} more`,
     onlySel:'selected only',onlySelTip:'Limit the catalog to your selected blueprints (other filters still apply)',
-    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters',msClear:'Clear selection (all)',
+    onlySelHidden:n=>`The other filters hide ${n} selected blueprint(s).`,resetFilters:'Reset filters',msClear:'Clear selection (all)',searchPh:'Search … (name / material)',
     imgWiki:'Image: Star Citizen Wiki (starcitizen.tools) · © CIG',imgOwn:'Image: own capture · © CIG'}
 };
 const LS={lang:'scbp_lang',theme:'scbp_theme',sel:'scbp_sel',stock:'scbp_stock',owned:'scbp_owned',ownMeta:'scbp_ownmeta',onlySel:'scbp_onlysel'};
@@ -875,7 +903,7 @@ function specOf(desc){desc=String(desc||'').replace(/\\n/g,'\n').replace(/ /g,'
 // (until an SCDL import exists) and derive the filter value lists and status lines.
 function ingest(raw){
   BP=(raw.blueprints||[]).map(b=>{
-    const s=(b.name+' '+(b.cls||'')+' '+(b.sub||'')+' '+(b.sz?'s'+b.sz:'')+' '+(b.gr||'')+' '+(b.kl||'')+' '+b.costs.map(c=>c.n).join(' ')).toLowerCase();
+    const s=(b.name+' '+(b.cls||'')+' '+(b.sub||'')+' '+(CAT_EN[b.cls]||'')+' '+(CAT_EN[b.sub]||'')+' '+(b.sz?'s'+b.sz:'')+' '+(b.gr||'')+' '+(b.kl||'')+' '+b.costs.map(c=>c.n).join(' ')).toLowerCase();
     return Object.assign({},b,{_s:s});
   });
   BP.forEach(b=>{if(b.def && OWNMETA===null) OWNED[b.name]=1;});
@@ -947,7 +975,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') Object.values(MS).f
 
 // Fill the category filter and rebuild the dependent filters.
 function buildClassFilter(){
-  msSet('fClass',CLASS_ORDER.map(c=>({v:c,label:c})));
+  msSet('fClass',CLASS_ORDER.map(c=>({v:c,label:catL(c)})));
   buildSubFilter();
   buildSpecFilters();
 }
@@ -960,7 +988,7 @@ function buildSpecFilters(){
 // Fill the subcategory filter with the subcategories of the chosen categories (none chosen: all), grouped by category.
 function buildSubFilter(){
   const cl=MS.fClass.sel;
-  const items=CLASS_ORDER.filter(c=>!cl.size||cl.has(c)).flatMap(c=>(SUBS[c]||[]).map(s=>({v:c+'|'+s,label:s,grp:c})));
+  const items=CLASS_ORDER.filter(c=>!cl.size||cl.has(c)).flatMap(c=>(SUBS[c]||[]).slice().sort((x,y)=>catL(x).localeCompare(catL(y))).map(s=>({v:c+'|'+s,label:catL(s),grp:catL(c)})));
   msSet('fSub',items);
 }
 const onlySelBtn=document.getElementById('onlySel');
@@ -1038,7 +1066,7 @@ function renderList(){
   const slice=arr.slice(0,renderCap);
   let html=slice.map(b=>`
     <div class="bp${SEL[b.name]?' insel':''}${OWNED[b.name]?' own':''}" data-nm="${esc(b.name)}">
-      <div class="top">${picHtml(b)}<div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(b.sub)}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div></div>
+      <div class="top">${picHtml(b)}<div class="hd"><span class="nm">${esc(b.name)}</span><span class="badge">${esc(catL(b.sub))}</span>${OWNED[b.name]?`<span class="badge owned">✓ ${t('owned')}</span>`:''}</div></div>
       ${specBadge(b)}
       <div class="recipe">${recipeChips(b)}</div>
       ${srcLine(b)}
@@ -1216,7 +1244,7 @@ document.getElementById('themeBtn').addEventListener('click',()=>{
   root.setAttribute('data-theme',next);save(LS.theme,next);
 });
 // Translate all elements marked with data-i18n.
-function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});}
+function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});document.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.placeholder=t(el.dataset.i18nPh);});}
 
 /* ---------- Tabs on narrow screens (catalog first) ---------- */
 window.BP_TABS=scPanels(document.getElementById('bpTabs'),[
