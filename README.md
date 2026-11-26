@@ -2,7 +2,7 @@
 
 A single-file, offline HTML tool that lists **every craftable Star Citizen blueprint**, shows the materials each one needs, and builds an exportable **procurement list** from your selection — layout and workflow mirror the [StarCitizen Wikelo-Planer](https://github.com/Jaegerfeld/StarCitizen-Wikelo-Planer).
 
-**🌐 Online version:** https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/
+**🌐 Online version:** in the SC Cockpit: https://jaegerfeld.github.io/sc-cockpit/#/werkstatt/bauplan · single page: https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/app.html
 *(German README: [README.de.md](README.de.md))*
 
 ## Features

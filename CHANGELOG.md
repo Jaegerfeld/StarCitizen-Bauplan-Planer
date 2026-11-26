@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen an diesem Projekt. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.0.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [1.9.2] – 2026-11-26
+
+### Geändert
+- **Die Adresse dieses Tools leitet ins SC Cockpit weiter.** Der Bauplan-Planer ist ins [SC Cockpit](https://jaegerfeld.github.io/sc-cockpit/) eingezogen: Werkstatt (Baupläne). Wer https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/ öffnet, landet dort im passenden Bereich; online sind deine Daten dieselben, weil Cockpit und Tool denselben Browser-Speicher nutzen.
+- Diese Seite selbst bleibt erreichbar: https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/app.html. Am Tool hat sich nichts geändert.
+
 ## [1.9.1] – 2026-11-22
 
 ### Behoben

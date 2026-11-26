@@ -2,7 +2,7 @@
 
 Ein Standalone-HTML-Tool (offline lauffähig), das **alle craftbaren Star-Citizen-Baupläne** auflistet, den Materialbedarf jedes Bauplans zeigt und aus deiner Auswahl eine exportierbare **Beschaffungsliste** baut — Layout und Bedienung wie beim [StarCitizen Wikelo-Planer](https://github.com/Jaegerfeld/StarCitizen-Wikelo-Planer).
 
-**🌐 Online-Version:** https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/
+**🌐 Online-Version:** im SC Cockpit: https://jaegerfeld.github.io/sc-cockpit/#/werkstatt/bauplan · Einzelseite: https://jaegerfeld.github.io/StarCitizen-Bauplan-Planer/app.html
 
 ## Funktionen
 
