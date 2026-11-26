@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!--
+  Autor:          Robert Seebauer
+  Repository:     https://github.com/Jaegerfeld/StarCitizen-Bauplan-Planer
+  KI-Unterstützung: Erstellt mit Unterstützung von Claude (Anthropic)
+  Erstellt:       26.11.2026
+  Geändert:       26.11.2026
+  Lizenz:         BSD-3-Clause (siehe LICENSE)
+
+  Fachliche Funktion:
+    Weiterleitung der Adresse dieses Tools ins SC Cockpit. Der Bauplan-Planer ist ins
+    Cockpit eingezogen (Werkstatt (Baupläne)). Der Workflow veröffentlicht diese Datei
+    als index.html; die Seite des Tools selbst liegt als app.html daneben.
+    Die Adresse trägt keinen Stand; es gibt nur ein Ziel.
+    Ohne JavaScript bleibt die Seite stehen und zeigt beide Links.
+-->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SC Bauplan-Planer → SC Cockpit</title>
+<script>
+/* Forward to the cockpit; this tool has one target. */
+(function(){var C='https://jaegerfeld.github.io/sc-cockpit/', h=location.hash||'';
+  location.replace(C+'#/werkstatt/bauplan');})();
+</script>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0f14;color:#e8eef5;font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  main{max-width:560px;padding:24px}
+  h1{font-size:22px;margin:0 0 10px}
+  p{margin:0 0 14px;color:#b7c3d0}
+  a.btn{display:inline-block;min-height:44px;line-height:44px;padding:0 18px;border-radius:8px;border:1px solid #2a3542;color:#e8eef5;text-decoration:none;margin:0 8px 8px 0}
+  a.btn.pri{background:#3fd0e0;border-color:#3fd0e0;color:#06222a;font-weight:700}
+  a.btn:focus-visible{outline:3px solid #ffb347;outline-offset:2px}
+  hr{border:0;border-top:1px solid #2a3542;margin:18px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Der Bauplan-Planer ist jetzt Teil des SC Cockpits</h1>
+  <p>Du wirst weitergeleitet. Im Cockpit findest du ihn unter Werkstatt (Baupläne); deine Daten sind dort dieselben.</p>
+  <p><a class="btn pri" href="https://jaegerfeld.github.io/sc-cockpit/#/werkstatt/bauplan">Zum Cockpit</a><a class="btn" href="app.html">Einzelseite öffnen</a></p>
+  <hr>
+  <h1 lang="en">The Blueprint Planner is now part of the SC Cockpit</h1>
+  <p lang="en">You are being forwarded. In the cockpit you find it under Workshop (blueprints); your data is the same there.</p>
+  <p lang="en"><a class="btn pri" href="https://jaegerfeld.github.io/sc-cockpit/#/werkstatt/bauplan">To the cockpit</a><a class="btn" href="app.html">Open the single page</a></p>
+</main>
+</body>
+</html>
